@@ -352,6 +352,9 @@ h1 {
   margin-top: 19px;
 }
 .notice {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 15px;
