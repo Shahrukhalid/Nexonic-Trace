@@ -1,0 +1,3 @@
+# Reviewed false positive: the literal output filename "notary-key.p8" in decode(...).
+# This is not a key. Match this historical finding only; scan all future changes.
+2bc51470ac1102def72c2a05147807201d1199db:scripts/production.py:generic-api-key:117
