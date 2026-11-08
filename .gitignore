@@ -1,0 +1,17 @@
+node_modules/
+dist/
+target/
+*.tsbuildinfo
+.DS_Store
+.env*
+!.env.example
+playwright-report/
+test-results/
+src-tauri/gen/
+*.db
+*.db-shm
+*.db-wal
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

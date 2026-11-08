@@ -1,0 +1,95 @@
+use std::time::{Duration, Instant};
+use tauri::ipc::Channel;
+use tauri_plugin_opener::OpenerExt;
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
+use trace_core::{SearchSummary, SearchUpdate};
+
+#[derive(Default)]
+struct SearchState {
+    active: Mutex<Option<(String, CancellationToken)>>,
+    last_start: Mutex<Option<Instant>>,
+}
+
+#[tauri::command]
+async fn start_search(
+    state: tauri::State<'_, SearchState>,
+    job_id: String,
+    query: String,
+    mode: String,
+    timeout_seconds: u64,
+    on_update: Channel<SearchUpdate>,
+) -> Result<SearchSummary, String> {
+    if !["quick", "deep", "comprehensive"].contains(&mode.as_str()) {
+        return Err("Unsupported search mode.".into());
+    }
+    if job_id.len() > 64 || job_id.is_empty() || !trace_core::valid_query(&query) {
+        return Err("Invalid search request.".into());
+    }
+    let token = CancellationToken::new();
+    {
+        let mut active = state.active.lock().await;
+        if active.is_some() {
+            return Err("A search is already running.".into());
+        }
+        let mut last = state.last_start.lock().await;
+        if last.is_some_and(|time| time.elapsed() < Duration::from_secs(2)) {
+            return Err("Please wait two seconds between searches.".into());
+        }
+        *last = Some(Instant::now());
+        *active = Some((job_id.clone(), token.clone()));
+    }
+    let result = trace_core::discover(job_id.clone(), &query, timeout_seconds, token, |update| {
+        let _ = on_update.send(update);
+    })
+    .await;
+    let mut active = state.active.lock().await;
+    if active.as_ref().is_some_and(|(id, _)| id == &job_id) {
+        *active = None;
+    }
+    result
+}
+
+#[tauri::command]
+async fn cancel_search(state: tauri::State<'_, SearchState>, job_id: String) -> Result<(), String> {
+    if let Some((id, token)) = &*state.active.lock().await {
+        if id == &job_id {
+            token.cancel();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_source(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let parsed = reqwest_url(&url)?;
+    app.opener()
+        .open_url(parsed, None::<&str>)
+        .map_err(|_| "Could not open the source in your browser.".into())
+}
+
+fn reqwest_url(url: &str) -> Result<String, String> {
+    // Only generated profile URLs with a supported username can leave the app.
+    for prefix in ["https://github.com/", "https://dev.to/"] {
+        if let Some(username) = url.strip_prefix(prefix) {
+            if trace_core::valid_query(username) {
+                return Ok(url.into());
+            }
+        }
+    }
+    Err("Unsupported source URL.".into())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .manage(SearchState::default())
+        .invoke_handler(tauri::generate_handler![
+            start_search,
+            cancel_search,
+            open_source
+        ])
+        .run(tauri::generate_context!())
+        .expect("Could not start Nexonic Trace");
+}
