@@ -31,6 +31,14 @@ class WorkspaceTest {
         }
         assertTrue("History deletion must be reachable by touch", device.wait(Until.hasObject(By.text("Delete all data")), 10000))
         device.findObject(By.text("Delete all data")).click()
+        // The success notice is at the top of the document; UiAutomator only
+        // exposes WebView nodes in the viewport. Scroll it into view first.
+        device.waitForIdle()
+        for (attempt in 0 until 8) {
+            if (device.hasObject(By.textContains("have been cleared"))) break
+            device.swipe(device.displayWidth / 2, device.displayHeight / 3,
+                device.displayWidth / 2, device.displayHeight * 3 / 4, 30)
+        }
         assertTrue("Native data deletion must complete", device.wait(Until.hasObject(By.textContains("have been cleared")), 15000))
         device.findObject(By.text("Security")).click()
         assertTrue("Explicit password check must be available", device.wait(Until.hasObject(By.text("Check password")), 10000))
