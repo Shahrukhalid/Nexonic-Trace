@@ -11,7 +11,7 @@ A local-first public-profile discovery and exposure-checking application for Win
 ## Features
 
 - Minimal React/TypeScript interface with light/dark themes, compact evidence cards, keyboard controls, and touch navigation.
-- Five official public-API connectors: GitHub, DEV Community, Codeberg, Lichess, and Chess.com. Quick/Deep/Comprehensive searches check 2/4/5 sources.
+- 30 official public-API profile sources, including GitHub, GitLab, Mastodon, Bluesky, Lemmy, Wikipedia, Hacker News, Hugging Face, Codeberg, Lichess and Chess.com. Quick/Deep/Comprehensive searches check 10/20/30 sources. See [docs/SOURCE-RESEARCH.md](docs/SOURCE-RESEARCH.md).
 - Two-worker concurrency, global and per-domain pacing, timeouts, one controlled transient retry, cancellation, and completed/failed/blocked/skipped outcomes.
 - Structured profile verification with positive and negative signals. HTTP 200 alone never confirms an account. Matching usernames never establish shared ownership.
 - Optional Brave Search integration for public mentions of usernames or email addresses. Indexed mentions are explicitly unverified and never imply account registration. Quick/Deep/Comprehensive limits are 20/60/100 indexed results across at most 1/3/5 paced pages. Pagination stops when the provider has no further results; duplicates are removed. Partial results survive cancellation or a later-page provider failure. Provider credentials and applicable plan charges are required.
@@ -41,7 +41,7 @@ Provider keys are session-only and cleared when the app closes or data is delete
 
 ## Coverage and limits
 
-The versioned connector registry records allowed HTTPS endpoints, username syntax, detection signals, pacing, timeout, priority, reliability status, and last verification date. All five connectors passed limited positive/missing-account smoke checks on 2026-11-08. This is smoke validation, not a guarantee of broad accuracy or identity ownership. Rule changes ship with tested application updates; arbitrary remote rules are not loaded.
+The versioned connector registry records allowed HTTPS endpoints, username syntax, detection signals, pacing, timeout, priority, reliability status, and last verification date. Each rule declares the exact fields that prove an account exists and the provider's documented missing-account response. All 30 were verified live on 2026-11-08 against a known account and an impossible username, and those captured responses are regression tests. This shows the rules match the providers today; it is not a guarantee of identity ownership. Rule changes ship with tested application updates; arbitrary remote rules are not loaded.
 
 Only permitted public APIs and explicitly selected licensed indexes are queried. The app does not search the entire internet, bypass login/CAPTCHA/rate limits, or use signup, password-reset, or recovery flows. Licensed DarkOwl coverage includes its collected darknet and adjacent sources, not every Tor/I2P service or private community. No result means only that the selected index returned no match. Email breach records, dark-web mentions and password prevalence remain separate; the app does not verify or expose a working credential pair. Searches disclose the supplied query to each selected source or optional provider. No analytics or Nexonic server upload is enabled.
 

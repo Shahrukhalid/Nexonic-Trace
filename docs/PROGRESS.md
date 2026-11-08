@@ -5,7 +5,7 @@ The latest published, validated downloads are [v0.1.0-dev.4](https://github.com/
 ## Implemented
 
 - Minimal desktop/mobile workspace, light/dark themes, keyboard controls and compact expandable evidence.
-- Five directly verified public-profile APIs with 2/4/5-source depths, bounded concurrency, pacing, timeouts, retry and cancellation. HTTP success alone never confirms an account or shared ownership.
+- 30 live-verified public-profile APIs driven by declarative rules, with 10/20/30-source depths, bounded concurrency, pacing, timeouts, retry and cancellation. HTTP success alone never confirms an account or shared ownership.
 - Visible Profiles / Web / Dark web areas. Brave public-web and licensed DarkOwl metadata discovery support usernames/emails with 20/60/100-result budgets, deduplication and paced pagination. Later-page failures and cancellation preserve partial results. See [coverage](SEARCH-COVERAGE.md).
 - Authorized HIBP breach metadata; optional Pro stealer-log service domains require provider-verified domain control. Private Pwned Passwords checks send only a five-character hash prefix. No leaked document retrieval, plaintext password transmission, credential testing or inferred credential pairs.
 - Session-only provider keys with cost consent, no app server/analytics, opt-in SQLite history, retention, recent/reopened searches, same-query/scope comparisons, deletion and redacted JSON/CSV/HTML/PDF exports. Dark-web exports start redacted. Startup reads recover from lost replies without re-enabling deleted preferences.

@@ -1,0 +1,396 @@
+{
+ "_note": "Abridged from live responses captured 2026-11-08; field names, types and messages are unchanged.",
+ "missingQuery": "zq9xv7nonexist4k2",
+ "connectors": {
+  "github": {
+   "query": "torvalds",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"login\": \"torvalds\", \"id\": 1024025, \"html_url\": \"https://github.com/torvalds\", \"type\": \"User\", \"name\": \"Linus Torvalds\", \"blog\": \"\", \"email\": null, \"bio\": null}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest\", \"status\": \"404\"}"
+   }
+  },
+  "gitlab": {
+   "query": "gitlab",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "[{\"id\": 397121, \"username\": \"gitlab\", \"public_email\": \"\", \"name\": \"GitLab\", \"state\": \"active\", \"web_url\": \"https://gitlab.com/gitlab\"}]"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "[]"
+   }
+  },
+  "hackernews": {
+   "query": "pg",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"about\": \"Bug fixer.\", \"created\": 1160418092, \"id\": \"pg\", \"karma\": 157316}"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "null"
+   }
+  },
+  "mastodon-social": {
+   "query": "Gargron",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": \"1\", \"username\": \"Gargron\", \"acct\": \"Gargron\", \"display_name\": \"Gargron\", \"url\": \"https://mastodon.social/@Gargron\", \"uri\": \"https://mastodon.social/users/Gargron\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"Record not found\"}"
+   }
+  },
+  "bluesky": {
+   "query": "jay",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"did\": \"did:plc:mfm3grjeffxyfuxj3uiisfuz\", \"handle\": \"jay.bsky.social\", \"createdAt\": \"2023-04-12T21:15:32.342Z\"}"
+   },
+   "missing": {
+    "status": 400,
+    "contentType": "application/json",
+    "body": "{\"error\": \"InvalidRequest\", \"message\": \"Profile not found\"}"
+   }
+  },
+  "dev": {
+   "query": "ben",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"type_of\": \"user\", \"id\": 1, \"username\": \"ben\", \"name\": \"Ben Halpern\", \"summary\": \"A Canadian software developer who thinks he\\u2019s funny.\", \"website_url\": \"http://benhalpern.com\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"not found\", \"status\": 404}"
+   }
+  },
+  "huggingface": {
+   "query": "julien-c",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"_id\": \"5dd96eb166059660ed1ee413\", \"fullname\": \"Julien Chaumond\", \"user\": \"julien-c\", \"type\": \"user\", \"details\": \"<3 ML/AI for everyone, building products to propel communities fwd\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"This user does not exist\"}"
+   }
+  },
+  "wikipedia": {
+   "query": "Jimbo_Wales",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"batchcomplete\": \"\", \"query\": {\"users\": [{\"userid\": 24, \"name\": \"Jimbo Wales\"}]}}"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"batchcomplete\": \"\", \"query\": {\"users\": [{\"name\": \"Zq9xv7nonexist4k2\", \"missing\": \"\"}]}}"
+   }
+  },
+  "lichess": {
+   "query": "thibault",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": \"thibault\", \"username\": \"thibault\", \"createdAt\": 1290415680000, \"url\": \"https://lichess.org/@/thibault\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"Not found\"}"
+   }
+  },
+  "chess": {
+   "query": "hikaru",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"player_id\": 15448422, \"@id\": \"https://api.chess.com/pub/player/hikaru\", \"url\": \"https://www.chess.com/member/Hikaru\", \"name\": \"Hikaru Nakamura\", \"username\": \"hikaru\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"code\": 0, \"message\": \"User \\\"zq9xv7nonexist4k2\\\" not found.\"}"
+   }
+  },
+  "codeberg": {
+   "query": "fnetx",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": 179, \"login\": \"fnetX\", \"full_name\": \"Otto\", \"html_url\": \"https://codeberg.org/fnetX\", \"website\": \"\", \"description\": \"Load: 5.6\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"message\": \"user redirect does not exist [name: zq9xv7nonexist4k2]\", \"url\": \"https://codeberg.org/api/swagger\"}"
+   }
+  },
+  "lemmy-world": {
+   "query": "ruud",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"person_view\": {\"person\": {\"id\": 2, \"name\": \"ruud\", \"display_name\": \"Ruud\", \"actor_id\": \"https://lemmy.world/u/ruud\", \"local\": true, \"deleted\": false}, \"is_admin\": true}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"couldnt_find_person\"}"
+   }
+  },
+  "codeforces": {
+   "query": "tourist",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"status\": \"OK\", \"result\": [{\"handle\": \"tourist\", \"registrationTimeSeconds\": 1265987288, \"rank\": \"legendary grandmaster\"}]}"
+   },
+   "missing": {
+    "status": 400,
+    "contentType": "application/json",
+    "body": "{\"status\": \"FAILED\", \"comment\": \"handles: User with handle zq9xv7nonexist4k2 not found\"}"
+   }
+  },
+  "crates": {
+   "query": "dtolnay",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"user\": {\"id\": 3618, \"login\": \"dtolnay\", \"name\": \"David Tolnay\", \"url\": \"https://github.com/dtolnay\"}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"errors\": [{\"detail\": \"Not Found\"}]}"
+   }
+  },
+  "speedrun": {
+   "query": "Cosmo",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"data\": {\"id\": \"y8d10986\", \"names\": {\"international\": \"Cosmo\", \"japanese\": null}, \"weblink\": \"https://www.speedrun.com/users/Cosmo\", \"role\": \"user\"}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"status\": 404, \"message\": \"User zq9xv7nonexist4k2 could not be found.\"}"
+   }
+  },
+  "gitea": {
+   "query": "lunny",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": 1, \"login\": \"lunny\", \"type\": \"User\", \"full_name\": \"Lunny Xiao\", \"html_url\": \"https://gitea.com/lunny\", \"website\": \"https://gitea.com\", \"username\": \"lunny\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"message\": \"user redirect does not exist [name: zq9xv7nonexist4k2]\", \"url\": \"https://gitea.com/api/swagger\"}"
+   }
+  },
+  "hexpm": {
+   "query": "josevalim",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"url\": \"https://hex.pm/api/users/josevalim\", \"username\": \"josevalim\", \"inserted_at\": \"2014-04-23T16:23:58.000000Z\", \"full_name\": null}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"message\": \"Page not found\", \"status\": 404}"
+   }
+  },
+  "bitbucket": {
+   "query": "atlassian",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"type\": \"workspace\", \"uuid\": \"{02b941e3-cfaa-40f9-9a58-cec53e20bdc3}\", \"name\": \"Atlassian\", \"slug\": \"atlassian\", \"links\": {\"html\": {\"href\": \"https://bitbucket.org/atlassian/\"}}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"type\": \"error\", \"error\": {\"message\": \"No workspace with identifier 'zq9xv7nonexist4k2'.\"}}"
+   }
+  },
+  "codewars": {
+   "query": "jhoffner",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": \"508f2708b3be0c0200000002\", \"username\": \"jhoffner\", \"name\": \"Jake Hoffner\", \"honor\": 411563}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"success\": false, \"reason\": \"not found\"}"
+   }
+  },
+  "mixcloud": {
+   "query": "spartacus",
+   "found": {
+    "status": 200,
+    "contentType": "text/javascript; charset=utf-8",
+    "body": "{\"key\": \"/spartacus/\", \"url\": \"https://www.mixcloud.com/spartacus/\", \"name\": \"Spartacus\", \"username\": \"spartacus\", \"biog\": \"Part of the Mixcloud team - since Mixcloud was just a good idea.\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "text/javascript; charset=utf-8",
+    "body": "{\"error\": {\"type\": \"ResourceNotFoundException\", \"message\": \"User does not exist.\"}}"
+   }
+  },
+  "wikimedia-global": {
+   "query": "Jimbo_Wales",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"batchcomplete\": \"\", \"query\": {\"globaluserinfo\": {\"home\": \"enwiki\", \"id\": 1843, \"name\": \"Jimbo Wales\"}}}"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"batchcomplete\": \"\", \"query\": {\"globaluserinfo\": {\"missing\": \"\"}}}"
+   }
+  },
+  "fandom": {
+   "query": "Sannse",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"batchcomplete\": \"\", \"query\": {\"users\": [{\"userid\": 8, \"name\": \"Sannse\"}]}}"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"batchcomplete\": \"\", \"query\": {\"users\": [{\"name\": \"Zq9xv7nonexist4k2\", \"missing\": \"\"}]}}"
+   }
+  },
+  "monkeytype": {
+   "query": "Miodec",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"message\": \"Profile retrieved\", \"data\": {\"name\": \"Miodec\", \"addedAt\": 1589485757000, \"details\": {\"bio\": \"Developing the most customisable typing website. Sim racing here and there.\"}}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"message\": \"User not found\", \"data\": {\"uid\": \"\"}}"
+   }
+  },
+  "gnome-gitlab": {
+   "query": "ebassi",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "[{\"id\": 25, \"username\": \"ebassi\", \"public_email\": \"\", \"name\": \"Emmanuele Bassi\", \"state\": \"active\", \"web_url\": \"https://gitlab.gnome.org/ebassi\"}]"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "[]"
+   }
+  },
+  "kde-invent": {
+   "query": "ngraham",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "[{\"id\": 43, \"username\": \"ngraham\", \"public_email\": \"\", \"name\": \"Nate Graham\", \"state\": \"active\", \"web_url\": \"https://invent.kde.org/ngraham\"}]"
+   },
+   "missing": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "[]"
+   }
+  },
+  "fosstodon": {
+   "query": "kev",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": \"1\", \"username\": \"kev\", \"acct\": \"kev\", \"display_name\": \"Kev\", \"url\": \"https://fosstodon.org/@kev\", \"uri\": \"https://fosstodon.org/users/kev\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"Record not found\"}"
+   }
+  },
+  "infosec-exchange": {
+   "query": "jerry",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": \"3\", \"username\": \"jerry\", \"acct\": \"jerry\", \"display_name\": \"Jerry\", \"url\": \"https://infosec.exchange/@jerry\", \"uri\": \"https://infosec.exchange/users/jerry\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"Record not found\"}"
+   }
+  },
+  "mstdn-social": {
+   "query": "stux",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"id\": \"5168\", \"username\": \"stux\", \"acct\": \"stux\", \"display_name\": \"Stux\", \"url\": \"https://mstdn.social/@stux\", \"uri\": \"https://mstdn.social/users/stux\"}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"Record not found\"}"
+   }
+  },
+  "lemmy-ml": {
+   "query": "nutomic",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"person_view\": {\"person\": {\"id\": 8169, \"name\": \"nutomic\", \"display_name\": \"Nutomic\", \"actor_id\": \"https://lemmy.ml/u/nutomic\", \"local\": true, \"deleted\": false}, \"is_admin\": true}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"couldnt_find_person\"}"
+   }
+  },
+  "programming-dev": {
+   "query": "snowe",
+   "found": {
+    "status": 200,
+    "contentType": "application/json",
+    "body": "{\"person_view\": {\"person\": {\"id\": 2, \"name\": \"snowe\", \"display_name\": \"Snowe\", \"actor_id\": \"https://programming.dev/u/snowe\", \"local\": true, \"deleted\": false}, \"is_admin\": true}}"
+   },
+   "missing": {
+    "status": 404,
+    "contentType": "application/json",
+    "body": "{\"error\": \"couldnt_find_person\"}"
+   }
+  }
+ }
+}
