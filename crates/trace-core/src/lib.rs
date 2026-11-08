@@ -378,15 +378,23 @@ pub struct Engine {
 }
 impl Engine {
     async fn wait_turn(&self, host: String) {
-        let mut state = self.schedule.lock().await;
-        let now = tokio::time::Instant::now();
-        let at = now
-            .max(state.0.unwrap_or(now))
-            .max(*state.1.get(&host).unwrap_or(&now));
-        state.0 = Some(at + Duration::from_millis(500));
-        state.1.insert(host, at + Duration::from_secs(1));
-        drop(state);
-        tokio::time::sleep_until(at).await;
+        loop {
+            let mut state = self.schedule.lock().await;
+            let now = tokio::time::Instant::now();
+            let at = now
+                .max(state.0.unwrap_or(now))
+                .max(*state.1.get(&host).unwrap_or(&now));
+            if at > now {
+                drop(state);
+                tokio::time::sleep_until(at).await;
+                // Recheck after waking: timers can run late, and another worker
+                // may have started in the meantime. Book from the actual start.
+                continue;
+            }
+            state.0 = Some(now + Duration::from_millis(500));
+            state.1.insert(host, now + Duration::from_secs(1));
+            return;
+        }
     }
     pub async fn discover(
         &self,
@@ -654,15 +662,20 @@ mod connector_tests {
             );
         }
     }
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn scheduling_limits_domains_and_global_starts() {
-        let engine = Engine::default();
+        let engine = std::sync::Arc::new(Engine::default());
         let start = tokio::time::Instant::now();
         engine.wait_turn("a".into()).await;
-        engine.wait_turn("a".into()).await;
+        let worker = engine.clone();
+        let delayed = tokio::spawn(async move { worker.wait_turn("a".into()).await });
+        tokio::task::yield_now().await;
+        // Reproduce an OS scheduling delay after a timer's nominal deadline.
+        tokio::time::advance(Duration::from_millis(1040)).await;
+        delayed.await.unwrap();
         assert!(start.elapsed() >= Duration::from_secs(1));
         let next = tokio::time::Instant::now();
         engine.wait_turn("b".into()).await;
-        assert!(next.elapsed() >= Duration::from_millis(490));
+        assert!(next.elapsed() >= Duration::from_millis(500));
     }
 }

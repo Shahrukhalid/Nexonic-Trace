@@ -7,6 +7,11 @@ const device = devices.find(
 );
 if (!device) throw new Error("Dedicated Android test emulator not found.");
 try {
+  const avd = (await device.shell("getprop ro.boot.qemu.avd_name"))
+    .toString()
+    .trim();
+  if (avd !== "NexonicTraceTest")
+    throw new Error("Refusing to modify a non-test Android device.");
   const webview = await device.webView({ pkg: "com.nexonic.trace" });
   const page = await webview.page();
   await expect(
@@ -27,6 +32,29 @@ try {
         window.__TAURI_INTERNALS__
           .invoke("get_preferences")
           .then((p) => p.historyEnabled),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.getByLabel("Username or email address").fill("thibault");
+  await page.getByText("Comprehensive", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Start discovery", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Cancel search", exact: true })
+    .click();
+  await expect(page.locator(".results-heading")).toContainText("Canceled");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__TAURI_INTERNALS__
+          .invoke("list_scans")
+          .then((scans) =>
+            scans.some(
+              (scan) => scan.summary.canceled && scan.query === "thibault",
+            ),
+          ),
       ),
     )
     .toBe(true);
@@ -65,6 +93,8 @@ try {
       checks: [
         "real Rust IPC",
         "history opt-in",
+        "native cancellation",
+        "saved real scan",
         "missing credentials",
         "deletion",
       ],
