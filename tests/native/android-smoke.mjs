@@ -6,14 +6,18 @@ const device = devices.find(
   (d) => d.serial() === (process.env.ANDROID_SERIAL || "emulator-5554"),
 );
 if (!device) throw new Error("Dedicated Android test emulator not found.");
+let page;
 try {
   const avd = (await device.shell("getprop ro.boot.qemu.avd_name"))
     .toString()
     .trim();
   if (avd !== "NexonicTraceTest")
     throw new Error("Refusing to modify a non-test Android device.");
-  const webview = await device.webView({ pkg: "com.nexonic.trace" }, { timeout: 120_000 });
-  const page = await webview.page();
+  const webview = await device.webView(
+    { pkg: "com.nexonic.trace" },
+    { timeout: 120_000 },
+  );
+  page = await webview.page();
   await expect(
     page.getByRole("heading", { name: "Discover your digital footprint." }),
   ).toBeVisible();
@@ -90,6 +94,9 @@ try {
     JSON.stringify({
       passed: true,
       device: device.serial(),
+      testedAbi: (await device.shell("getprop ro.product.cpu.abi"))
+        .toString()
+        .trim(),
       checks: [
         "real Rust IPC",
         "history opt-in",
@@ -103,6 +110,21 @@ try {
   console.log(
     "Android native WebView, real Rust IPC, opt-in persistence, missing-provider limitation, and deletion checks passed.",
   );
+} catch (error) {
+  if (page) {
+    await mkdir("test-results", { recursive: true });
+    await page
+      .screenshot({ path: "test-results/android-failure.png" })
+      .catch(() => {});
+    console.error(
+      "Native UI status:",
+      await page
+        .getByRole("status")
+        .allTextContents()
+        .catch(() => []),
+    );
+  }
+  throw error;
 } finally {
   await device.close();
 }

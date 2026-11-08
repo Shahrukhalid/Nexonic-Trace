@@ -31,6 +31,7 @@ import {
   RecentScans,
 } from "./features";
 import type { Preferences, SavedScan } from "./features";
+import { loadLocalSettings } from "./settings";
 import { createReport } from "./reports";
 import type { ReportFormat } from "./reports";
 import type { Finding, SearchMode, SearchSummary } from "./models";
@@ -81,12 +82,15 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [historyEnabled, setHistoryEnabled] = useState(false);
   const [prefsReady, setPrefsReady] = useState(!isNative());
+  const [prefsFailed, setPrefsFailed] = useState(false);
+  const [prefsAttempt, setPrefsAttempt] = useState(0);
   const [webSearch, setWebSearch] = useState(false);
   const [activeWeb, setActiveWeb] = useState(false);
   const [resetEpoch, setResetEpoch] = useState(0);
   const job = useRef<string | null>(null);
   const queryInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const prefsRead = useRef<AbortController | null>(null);
   const [total, setTotal] = useState(2);
   const kind = detectQuery(query);
   const confirmed = findings.filter((f) => f.status === "confirmed").length;
@@ -116,20 +120,33 @@ export default function App() {
   useEffect(() => {
     if (!isNative()) return;
     let active = true;
-    void invoke<Preferences>("get_preferences")
+    const controller = new AbortController();
+    prefsRead.current = controller;
+    setPrefsFailed(false);
+    void loadLocalSettings(
+      () => invoke<Preferences>("get_preferences"),
+      controller.signal,
+    )
       .then((prefs) => {
-        if (active) {
+        if (active && !controller.signal.aborted) {
           setTheme(prefs.appearance);
           setTimeout(prefs.timeoutSeconds);
           setHistoryEnabled(prefs.historyEnabled);
           setPrefsReady(true);
         }
       })
-      .catch((error) => setNotice(errorText(error)));
+      .catch((error) => {
+        if (active && !controller.signal.aborted) {
+          setPrefsFailed(true);
+          setNotice(errorText(error));
+        }
+      });
     return () => {
       active = false;
+      controller.abort();
+      if (prefsRead.current === controller) prefsRead.current = null;
     };
-  }, []);
+  }, [prefsAttempt]);
   useEffect(() => {
     if (isNative() && prefsReady)
       void invoke("set_preferences", {
@@ -262,6 +279,9 @@ export default function App() {
   async function deleteAll() {
     try {
       if (isNative()) await invoke("delete_all_data");
+      prefsRead.current?.abort();
+      setPrefsFailed(false);
+      setPrefsReady(true);
       setFindings([]);
       setQuery("");
       setActiveQuery("");
@@ -605,6 +625,19 @@ export default function App() {
           {page === "settings" && (
             <section className="panel">
               <h1>Settings</h1>
+              {prefsFailed && (
+                <div className="setting">
+                  <span>Local settings could not be loaded.</span>
+                  <button
+                    onClick={() => {
+                      setNotice("");
+                      setPrefsAttempt((value) => value + 1);
+                    }}
+                  >
+                    Reload local settings
+                  </button>
+                </div>
+              )}
               <div className="setting">
                 <span>Appearance</span>
                 <div className="segments">

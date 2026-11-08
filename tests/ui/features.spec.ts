@@ -6,7 +6,9 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     let preferences = {
       appearance: "dark",
-      historyEnabled: false,
+      historyEnabled: new URLSearchParams(location.search).has(
+        "delete-during-startup",
+      ),
       timeoutSeconds: 12,
     };
     let scans: unknown[] = [];
@@ -21,11 +23,29 @@ test.beforeEach(async ({ page }) => {
       requestOutcome: "completed",
     };
     let id = 0;
+    let preferenceReads = 0;
+    const fixtureCase = new URLSearchParams(location.search);
     const internals = {
       transformCallback: () => ++id,
       unregisterCallback: () => {},
       invoke: async (command: string, args: Record<string, unknown> = {}) => {
-        if (command === "get_preferences") return preferences;
+        if (command === "get_preferences") {
+          preferenceReads++;
+          if (
+            fixtureCase.has("delete-during-startup") &&
+            preferenceReads === 1
+          ) {
+            const snapshot = { ...preferences };
+            return new Promise((resolve) =>
+              window.setTimeout(() => resolve(snapshot), 1000),
+            );
+          }
+          if (fixtureCase.has("lost-settings-replies") && preferenceReads <= 2)
+            return new Promise(() => {});
+          if (fixtureCase.has("settings-read-failure") && preferenceReads <= 3)
+            throw "Local database is temporarily unavailable.";
+          return preferences;
+        }
         if (command === "set_preferences") {
           preferences = args.preferences as typeof preferences;
           return;
@@ -141,4 +161,53 @@ test("opt-in history saves a scan, reopens it, and deletes it", async ({
   await expect(
     page.getByRole("heading", { name: "No saved searches" }),
   ).toBeVisible();
+});
+
+test("local settings recover when startup replies are lost", async ({
+  page,
+}) => {
+  await page.goto("/?lost-settings-replies=1");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const history = page.getByLabel("Save searches on this device", {
+    exact: true,
+  });
+  await expect(history).toBeEnabled({ timeout: 10000 });
+  await expect(history).not.toBeChecked();
+  await history.check();
+  await expect(history).toBeChecked();
+});
+
+test("failed settings reads stay disabled and can be retried", async ({
+  page,
+}) => {
+  await page.goto("/?settings-read-failure=1");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const history = page.getByLabel("Save searches on this device", {
+    exact: true,
+  });
+  await expect(
+    page.getByRole("button", { name: "Reload local settings" }),
+  ).toBeVisible();
+  await expect(history).toBeDisabled();
+  await page.getByRole("button", { name: "Reload local settings" }).click();
+  await expect(history).toBeEnabled();
+  await expect(history).not.toBeChecked();
+});
+
+test("deletion cannot be undone by a late startup settings reply", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto("/?delete-during-startup=1");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Delete all data", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("have been cleared");
+  await page.clock.fastForward(2000);
+  const history = page.getByLabel("Save searches on this device", {
+    exact: true,
+  });
+  await expect(history).toBeEnabled();
+  await expect(history).not.toBeChecked();
 });

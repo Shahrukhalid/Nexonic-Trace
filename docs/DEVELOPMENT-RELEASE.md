@@ -1,5 +1,7 @@
 Nexonic Trace development test builds for Windows x64, macOS Apple Silicon and Intel, and Android ARM64/ARM32.
 
+This update refreshes the frontend toolchain, recovers lost startup-settings replies, protects deletion from late replies, and includes the Rust standard-library notices. Package evidence now identifies the source commit and the Android ABI actually tested; mixed-commit or unexpected release files are rejected.
+
 The workspace is simplified for fast searches, evidence review, local opt-in history, comparisons and redacted exports. Username checks use five permitted public APIs with conservative verification. Public-web discovery requires your own licensed Brave Search key. Authorized email breach checks require your own licensed HIBP key; sensitive breach responses are excluded. Password checks send only a five-character hash prefix to Pwned Passwords.
 
 These are development artifacts, not production-signed releases. Windows executables are unsigned. Mac apps are ad-hoc signed and are not notarized; Gatekeeper can block them. Android APKs use development certificates and are not Play Store releases. Production distribution is blocked pending protected signing credentials and production acceptance. Do not bypass operating-system protections.
