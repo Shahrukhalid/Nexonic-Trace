@@ -1,4 +1,5 @@
 pub mod registry;
+pub mod security;
 // Public API discovery. Account existence is never an ownership assertion.
 use chrono::Utc;
 use futures_util::{stream::FuturesUnordered, StreamExt};
@@ -76,6 +77,8 @@ pub struct SearchSummary {
     pub findings: Vec<Finding>,
     pub canceled: bool,
     pub total: usize,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -445,6 +448,7 @@ impl Engine {
             job_id,
             findings: Vec::new(),
             canceled: false,
+            warnings: Vec::new(),
             total,
         };
         loop {

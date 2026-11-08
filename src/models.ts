@@ -28,6 +28,7 @@ export interface SearchSummary {
   findings: Finding[];
   canceled: boolean;
   total: number;
+  warnings?: string[];
 }
 export const statusLabels: Record<ResultStatus, string> = {
   confirmed: "Profile exists",
@@ -52,30 +53,38 @@ export function detectQuery(
 export function safeSourceUrl(value: string): boolean {
   try {
     const url = new URL(value);
+    const host = url.hostname.toLowerCase();
     return (
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
       !url.port &&
-      [
-        "github.com",
-        "dev.to",
-        "codeberg.org",
-        "lichess.org",
-        "www.chess.com",
-      ].includes(url.hostname)
+      host.includes(".") &&
+      !/^\d+(?:\.\d+){3}$/.test(host) &&
+      !host.startsWith("[") &&
+      ![
+        "localhost",
+        ".localhost",
+        ".local",
+        ".internal",
+        ".test",
+        ".invalid",
+      ].some((suffix) => host.endsWith(suffix))
     );
   } catch {
     return false;
   }
 }
+
 export function csvReport(findings: Finding[], redact = false): string {
   const cell = (value: string) =>
-    `"${(/^[=+\-@\t\r]/.test(value) ? "'" : "") + value.replaceAll('"', '""')}"`;
+    `"${(/^(?:\s*[=+\-@]|[\t\r\n])/.test(value) ? "'" : "") + value.replaceAll('"', '""')}"`;
   return [
     ["Website", "Status", "Source URL", "Evidence", "Checked at"],
     ...findings.map((f) => [
-      f.site,
+      redact && f.category === "Public web mention"
+        ? "Public web result"
+        : f.site,
       statusLabels[f.status],
       redact ? "[redacted]" : f.url,
       redact ? "[redacted]" : f.evidence.join("; "),

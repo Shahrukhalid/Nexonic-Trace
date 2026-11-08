@@ -21,8 +21,18 @@ import {
   saveReport,
   search,
 } from "./bridge";
-import { csvReport, detectQuery, safeSourceUrl, statusLabels } from "./models";
-import type { Finding, SearchMode } from "./models";
+import { detectQuery, safeSourceUrl, statusLabels } from "./models";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  SecurityPanel,
+  HistoryPanel,
+  ProviderSettings,
+  ExportPanel,
+} from "./features";
+import type { Preferences, SavedScan } from "./features";
+import { createReport } from "./reports";
+import type { ReportFormat } from "./reports";
+import type { Finding, SearchMode, SearchSummary } from "./models";
 
 type Page = "search" | "exposure" | "history" | "reports" | "settings";
 const pages = [
@@ -44,9 +54,11 @@ const errorText = (error: unknown) =>
 
 export default function App() {
   const [page, setPage] = useState<Page>("search");
-  const [theme, setTheme] = useState(() => {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
     try {
-      return localStorage.getItem("nexonic.theme") || "dark";
+      return localStorage.getItem("nexonic.theme") === "light"
+        ? "light"
+        : "dark";
     } catch {
       return "dark";
     }
@@ -64,7 +76,13 @@ export default function App() {
   const [sort, setSort] = useState("website");
   const [timeout, setTimeout] = useState(12);
   const [redact, setRedact] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [help, setHelp] = useState(false);
+  const [historyEnabled, setHistoryEnabled] = useState(false);
+  const [prefsReady, setPrefsReady] = useState(!isNative());
+  const [webSearch, setWebSearch] = useState(false);
+  const [activeWeb, setActiveWeb] = useState(false);
+  const [resetEpoch, setResetEpoch] = useState(0);
   const job = useRef<string | null>(null);
   const queryInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -95,9 +113,36 @@ export default function App() {
         : a.site.localeCompare(b.site),
     );
   useEffect(() => {
+    if (!isNative()) return;
+    let active = true;
+    void invoke<Preferences>("get_preferences")
+      .then((prefs) => {
+        if (active) {
+          setTheme(prefs.appearance);
+          setTimeout(prefs.timeoutSeconds);
+          setHistoryEnabled(prefs.historyEnabled);
+          setPrefsReady(true);
+        }
+      })
+      .catch((error) => setNotice(errorText(error)));
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (isNative() && prefsReady)
+      void invoke("set_preferences", {
+        preferences: {
+          appearance: theme,
+          timeoutSeconds: timeout,
+          historyEnabled,
+        },
+      }).catch((error) => setNotice(errorText(error)));
+  }, [theme, timeout, historyEnabled, prefsReady]);
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
-      localStorage.setItem("nexonic.theme", theme);
+      if (!isNative()) localStorage.setItem("nexonic.theme", theme);
     } catch {
       /* Session theme still works. */
     }
@@ -124,15 +169,11 @@ export default function App() {
       setNotice("Enter a valid username or email address.");
       return;
     }
-    if (kind === "email") {
-      setNotice(
-        "No provider is connected for public email discovery. Add an authorized provider in Settings. No requests were made.",
-      );
-      return;
-    }
     if (!isNative()) {
       setNotice(
-        "This is the interface preview; no search requests were made. Open the installed app for live discovery.",
+        kind === "email"
+          ? "No provider is connected in this preview. Open the installed app to configure public email discovery."
+          : "This is the interface preview; no search requests were made. Open the installed app for live discovery.",
       );
       return;
     }
@@ -146,21 +187,30 @@ export default function App() {
     setFilter("all");
     setNotice("");
     setActiveQuery(query.trim());
-    setTotal(sourceCount(mode));
+    const useWeb = kind === "email" || webSearch;
+    setActiveWeb(useWeb);
+    setTotal(useWeb ? 0 : sourceCount(mode));
     try {
-      const result = await search(id, query.trim(), mode, timeout, (update) => {
-        if (job.current === update.jobId) {
-          setTotal(update.total);
-          setFindings((previous) => [
-            ...previous.filter((f) => f.site !== update.finding.site),
-            update.finding,
-          ]);
-        }
-      });
+      const result = useWeb
+        ? await invoke<SearchSummary>("public_web_search", {
+            jobId: id,
+            query: query.trim(),
+            mode,
+          })
+        : await search(id, query.trim(), mode, timeout, (update) => {
+            if (job.current === update.jobId) {
+              setTotal(update.total);
+              setFindings((previous) => [
+                ...previous.filter((f) => f.site !== update.finding.site),
+                update.finding,
+              ]);
+            }
+          });
       setFindings(result.findings);
       setTotal(result.total);
       setCanceled(result.canceled);
       setCompleted(true);
+      if (result.warnings?.length) setNotice(result.warnings.join(" "));
     } catch (error) {
       setNotice(errorText(error));
     } finally {
@@ -179,53 +229,60 @@ export default function App() {
       setCanceling(false);
     }
   }
-  async function exportReport(format: "json" | "csv") {
-    const content =
-      format === "csv"
-        ? csvReport(findings, redact)
-        : JSON.stringify(
-            {
-              application: "Nexonic Trace",
-              version: "0.1.0",
-              generatedAt: new Date().toISOString(),
-              query: redact ? "[redacted]" : activeQuery,
-              canceled,
-              total,
-              ownership:
-                "Account existence does not establish identity ownership.",
-              findings: findings.map((f) =>
-                redact
-                  ? {
-                      ...f,
-                      url: "[redacted]",
-                      evidence: ["[redacted]"],
-                      publicFields: [],
-                    }
-                  : f,
-              ),
-            },
-            null,
-            2,
-          );
+  async function exportReport(format: ReportFormat) {
+    setExporting(true);
     try {
+      const content = await createReport(
+        format,
+        activeQuery,
+        findings,
+        redact,
+        canceled,
+        total,
+      );
       if (await saveReport(format, content)) setNotice("Report saved.");
+    } catch (error) {
+      setNotice(errorText(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+  function loadScan(scan: SavedScan) {
+    setFindings(scan.summary.findings);
+    setActiveQuery(scan.query);
+    setQuery(scan.query);
+    setTotal(scan.summary.total);
+    setCanceled(scan.summary.canceled);
+    setCompleted(true);
+    setFilter("all");
+    setActiveWeb(scan.mode.startsWith("public_web"));
+    setPage("search");
+  }
+  async function deleteAll() {
+    try {
+      if (isNative()) await invoke("delete_all_data");
+      setFindings([]);
+      setQuery("");
+      setActiveQuery("");
+      setCompleted(false);
+      setTheme("dark");
+      setHistoryEnabled(false);
+      setTimeout(12);
+      setWebSearch(false);
+      setResetEpoch((old) => old + 1);
+      try {
+        localStorage.removeItem("nexonic.theme");
+      } catch {
+        /* No saved browser preference. */
+      }
+      setNotice(
+        "Search history, session results, provider keys, and appearance have been cleared.",
+      );
     } catch (error) {
       setNotice(errorText(error));
     }
   }
-  function deleteAll() {
-    setFindings([]);
-    setQuery("");
-    setActiveQuery("");
-    setCompleted(false);
-    setTheme("dark");
-    try {
-      localStorage.removeItem("nexonic.theme");
-    } catch {
-      /* No persistent preference. */
-    }
-    setNotice("Session results and appearance have been cleared.");
-  }
+
   return (
     <div className="workspace">
       <a className="skip-link" href="#main">
@@ -366,7 +423,9 @@ export default function App() {
                     ))}
                   </div>
                   <span className="source-count">
-                    {sourceCount(mode)} sources
+                    {kind === "email" || webSearch
+                      ? `${mode === "quick" ? 3 : mode === "deep" ? 6 : 10} indexed results max`
+                      : `${sourceCount(mode)} sources`}
                   </span>
                 </div>
               </form>
@@ -375,7 +434,9 @@ export default function App() {
                   <div>
                     <LoaderCircle size={16} className="spin" />
                     <span>
-                      Checking {findings.length} of {total} sources
+                      {activeWeb
+                        ? "Searching the public index…"
+                        : `Checking ${findings.length} of ${total} sources`}
                     </span>
                     <button
                       className="text-button"
@@ -385,7 +446,9 @@ export default function App() {
                       {canceling ? "Canceling…" : "Cancel search"}
                     </button>
                   </div>
-                  <progress max={total} value={findings.length} />
+                  {!activeWeb && (
+                    <progress max={total} value={findings.length} />
+                  )}
                 </div>
               )}
               {(completed || findings.length > 0) && (
@@ -399,15 +462,16 @@ export default function App() {
                           : canceled
                             ? "Canceled"
                             : "Search complete"}{" "}
-                        · {confirmed} profiles confirmed · {findings.length}/
-                        {total} sources finished
+                        {activeWeb
+                          ? `· ${findings.length} indexed mentions · not independently verified`
+                          : `· ${confirmed} profiles confirmed · ${findings.length}/${total} sources finished`}
                       </p>
                     </div>
                     <div
                       className="outcome-counts"
                       aria-label="Source outcomes"
                     >
-                      {outcomes.completed} checked
+                      {outcomes.completed} {activeWeb ? "indexed" : "checked"}
                       {outcomes.failed > 0 && ` · ${outcomes.failed} failed`}
                       {outcomes.blocked > 0 && ` · ${outcomes.blocked} blocked`}
                       {outcomes.skipped > 0 && ` · ${outcomes.skipped} skipped`}
@@ -478,7 +542,11 @@ export default function App() {
                     </article>
                   ))}
                   {filtered.length === 0 && (
-                    <div className="empty">No results match this filter.</div>
+                    <div className="empty">
+                      {findings.length === 0
+                        ? "No results returned. This does not prove there is no exposure."
+                        : "No results match this filter."}
+                    </div>
                   )}
                   <p className="result-note">
                     A matching username does not prove identity or ownership.
@@ -488,7 +556,10 @@ export default function App() {
               {!running && !completed && (
                 <div className="starting-state">
                   <div className="source-list">
-                    {sources.slice(0, sourceCount(mode)).map((name) => (
+                    {(kind === "email" || webSearch
+                      ? ["Brave Search · provider key required"]
+                      : sources.slice(0, sourceCount(mode))
+                    ).map((name) => (
                       <span key={name}>{name}</span>
                     ))}
                   </div>
@@ -504,58 +575,19 @@ export default function App() {
             </>
           )}
           {page === "exposure" && (
-            <section className="panel">
-              <h1>Security checks</h1>
-              <p>
-                Authorized exposure integrations are being added in the next
-                milestone.
-              </p>
-              <p className="muted">
-                No breach or password requests have been made.
-              </p>
-            </section>
+            <SecurityPanel findings={findings} onNotice={setNotice} />
           )}
           {page === "history" && (
-            <section className="panel">
-              <h1>History</h1>
-              <div className="empty">
-                <History size={28} />
-                <h2>No saved searches</h2>
-                <p>History is off. Current results stay in this session.</p>
-              </div>
-            </section>
+            <HistoryPanel onLoad={loadScan} onNotice={setNotice} />
           )}
           {page === "reports" && (
-            <section className="panel">
-              <h1>Export results</h1>
-              <p>{findings.length} source checks available.</p>
-              <label className="setting">
-                <span>Redact query, source URLs, and evidence</span>
-                <input
-                  type="checkbox"
-                  checked={redact}
-                  onChange={(e) => setRedact(e.target.checked)}
-                />
-              </label>
-              <div className="button-row">
-                <button
-                  className="primary-button"
-                  onClick={() => exportReport("json")}
-                  disabled={!findings.length || running}
-                >
-                  JSON
-                  <Download size={16} />
-                </button>
-                <button
-                  className="secondary-button"
-                  onClick={() => exportReport("csv")}
-                  disabled={!findings.length || running}
-                >
-                  CSV
-                  <Download size={16} />
-                </button>
-              </div>
-            </section>
+            <ExportPanel
+              findings={findings}
+              busy={running || exporting}
+              onExport={exportReport}
+              redact={redact}
+              onRedact={setRedact}
+            />
           )}
           {page === "settings" && (
             <section className="panel">
@@ -586,14 +618,64 @@ export default function App() {
                   <option value={20}>20 seconds</option>
                 </select>
               </label>
+              <label className="setting">
+                <span>
+                  Save searches on this device
+                  <small>
+                    Off by default. Stores queries, results, and evidence
+                    metadata locally.
+                  </small>
+                </span>
+                <input
+                  aria-label="Save searches on this device"
+                  type="checkbox"
+                  checked={historyEnabled}
+                  disabled={!isNative() || !prefsReady}
+                  onChange={(e) => setHistoryEnabled(e.target.checked)}
+                />
+              </label>
+              <label className="setting">
+                <span>
+                  Use public-web search for usernames
+                  <small>
+                    Requires a Brave Search key. Results are indexed mentions,
+                    not verified profiles.
+                  </small>
+                </span>
+                <input
+                  aria-label="Use public-web search for usernames"
+                  type="checkbox"
+                  checked={webSearch}
+                  onChange={(e) => setWebSearch(e.target.checked)}
+                />
+              </label>
               <div className="setting">
                 <span>
-                  Local history<small>Off in this milestone</small>
+                  Source rules v1
+                  <small>
+                    Five connectors. Last smoke check: 8 November 2026. Rules
+                    update with application releases.
+                  </small>
                 </span>
-                <span className="muted">Session only</span>
+                <a
+                  href="https://github.com/Shahrukhalid/Nexonic-Trace/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (isNative()) {
+                      e.preventDefault();
+                      void openSource(
+                        "https://github.com/Shahrukhalid/Nexonic-Trace/releases",
+                      ).catch((error) => setNotice(errorText(error)));
+                    }
+                  }}
+                >
+                  Check updates
+                </a>
               </div>
+              <ProviderSettings key={resetEpoch} onNotice={setNotice} />
               <div className="setting">
-                <span>Clear session data</span>
+                <span>Delete all local data</span>
                 <button
                   className="danger-button"
                   onClick={deleteAll}
