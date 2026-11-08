@@ -114,28 +114,70 @@ fn reqwest_url(url: &str) -> Result<String, String> {
     Err("Unsupported source URL.".into())
 }
 
+#[cfg(debug_assertions)]
+#[tauri::command]
+fn smoke_stage() -> Result<String, String> {
+    if std::env::var("NEXONIC_SMOKE_TEST").as_deref() != Ok("1") {
+        return Err("Smoke harness is disabled.".into());
+    }
+    std::env::var("NEXONIC_SMOKE_STAGE").map_err(|_| "Smoke stage missing.".into())
+}
+#[cfg(debug_assertions)]
+#[tauri::command]
+fn smoke_finished(app: tauri::AppHandle, passed: bool, details: String) -> Result<(), String> {
+    if std::env::var("NEXONIC_SMOKE_TEST").as_deref() != Ok("1") {
+        return Err("Smoke harness is disabled.".into());
+    }
+    let path = std::env::var("NEXONIC_SMOKE_RESULT").map_err(|_| "Smoke output path missing.")?;
+    let body=serde_json::to_vec(&serde_json::json!({"passed":passed,"details":details.chars().take(1000).collect::<String>()})).map_err(|_|"Cannot serialize smoke result.")?;
+    std::fs::write(path, body).map_err(|_| "Cannot write smoke result.")?;
+    app.exit(if passed { 0 } else { 1 });
+    Ok(())
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::<tauri::Wry>::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            let (directory, _) =
+            let (directory, portable) =
                 data::data_directory(app.path().app_data_dir()?).map_err(std::io::Error::other)?;
+            #[cfg(debug_assertions)]
+            let directory =
+                if !portable && std::env::var("NEXONIC_SMOKE_TEST").as_deref() == Ok("1") {
+                    std::path::PathBuf::from(
+                        std::env::var("NEXONIC_SMOKE_DATA").map_err(std::io::Error::other)?,
+                    )
+                } else {
+                    directory
+                };
+            #[cfg(not(debug_assertions))]
+            let _ = portable;
             let store =
                 data::Store::open(&directory.join("trace.db")).map_err(std::io::Error::other)?;
             app.manage(features::Features::new(store));
             Ok(())
         })
         .manage(SearchState::default())
-        .invoke_handler(tauri::generate_handler![
+        .on_page_load(|webview, payload| {
+            #[cfg(debug_assertions)]
+            if std::env::var("NEXONIC_SMOKE_TEST").as_deref() == Ok("1")
+                && payload.event() == tauri::webview::PageLoadEvent::Finished
+            {
+                let _ = webview.eval(include_str!("../../tests/native/desktop-smoke.js"));
+            }
+            #[cfg(not(debug_assertions))]
+            let _ = (webview, payload);
+        });
+    macro_rules! handlers {($($extra:path),*)=>{tauri::generate_handler![
+
             start_search,
             cancel_search,
             open_source,
             features::get_preferences,
             features::set_preferences,
-            features::list_scans,
+            features::list_scans, features::recent_scans,
             features::delete_scan,
             features::clear_history,
             features::delete_all_data,
@@ -143,8 +185,14 @@ pub fn run() {
             features::provider_status,
             features::password_check,
             features::public_web_search,
-            features::breach_check
-        ])
+            features::breach_check, $($extra),*
+            ]};}
+
+    #[cfg(debug_assertions)]
+    let builder = builder.invoke_handler(handlers!(smoke_stage, smoke_finished));
+    #[cfg(not(debug_assertions))]
+    let builder = builder.invoke_handler(handlers!());
+    builder
         .run(tauri::generate_context!())
         .expect("Could not start Nexonic Trace");
 }

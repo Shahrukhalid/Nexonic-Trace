@@ -103,6 +103,7 @@ pub fn public_source_url(value: &str) -> bool {
     let Some(host) = url.host_str() else {
         return false;
     };
+    let host = host.trim_end_matches('.');
     url.scheme() == "https"
         && url.username().is_empty()
         && url.password().is_none()

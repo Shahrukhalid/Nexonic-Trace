@@ -1,0 +1,78 @@
+// Runs against our installed debug APK on a dedicated emulator, never a personal device.
+import { _android, expect } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
+const devices = await _android.devices();
+const device = devices.find(
+  (d) => d.serial() === (process.env.ANDROID_SERIAL || "emulator-5554"),
+);
+if (!device) throw new Error("Dedicated Android test emulator not found.");
+try {
+  const webview = await device.webView({ pkg: "com.nexonic.trace" });
+  const page = await webview.page();
+  await expect(
+    page.getByRole("heading", { name: "Discover your digital footprint." }),
+  ).toBeVisible();
+  const prefs = await page.evaluate(() =>
+    window.__TAURI_INTERNALS__.invoke("get_preferences"),
+  );
+  if (prefs.historyEnabled)
+    throw new Error("A fresh test install must not enable history.");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .getByLabel("Save searches on this device", { exact: true })
+    .check();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__TAURI_INTERNALS__
+          .invoke("get_preferences")
+          .then((p) => p.historyEnabled),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Check password", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Email breaches" }).click();
+  await page
+    .getByLabel("Email address", { exact: true })
+    .fill("fixture@example.org");
+  await page
+    .getByLabel("I own this address or have permission to check it.")
+    .check();
+  await page.getByRole("button", { name: "Check email breaches" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "No licensed breach provider",
+  );
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Delete all data" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__TAURI_INTERNALS__
+          .invoke("get_preferences")
+          .then((p) => p.historyEnabled),
+      ),
+    )
+    .toBe(false);
+  await mkdir("test-results", { recursive: true });
+  await writeFile(
+    "test-results/android-native.json",
+    JSON.stringify({
+      passed: true,
+      device: device.serial(),
+      checks: [
+        "real Rust IPC",
+        "history opt-in",
+        "missing credentials",
+        "deletion",
+      ],
+    }),
+  );
+  console.log(
+    "Android native WebView, real Rust IPC, opt-in persistence, missing-provider limitation, and deletion checks passed.",
+  );
+} finally {
+  await device.close();
+}

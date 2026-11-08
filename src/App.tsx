@@ -28,6 +28,7 @@ import {
   HistoryPanel,
   ProviderSettings,
   ExportPanel,
+  RecentScans,
 } from "./features";
 import type { Preferences, SavedScan } from "./features";
 import { createReport } from "./reports";
@@ -500,12 +501,16 @@ export default function App() {
                     </div>
                   </div>
                   {filtered.map((f) => (
-                    <article className="finding" key={f.site}>
+                    <article className="finding" key={f.url}>
                       <div className="finding-main">
                         <span className={`status-dot ${f.status}`} />
                         <div>
                           <h3>{f.site}</h3>
-                          <span className="muted">{f.category}</span>
+                          <span className="muted">
+                            {f.category === "Public web mention"
+                              ? `Indexed mention · ${new URL(f.url).hostname}`
+                              : f.category}
+                          </span>
                         </div>
                         <span className={`badge ${f.status}`}>
                           {statusLabels[f.status]}
@@ -573,6 +578,14 @@ export default function App() {
                 </div>
               )}
             </>
+          )}
+          {page === "search" && historyEnabled && (
+            <RecentScans
+              onLoad={loadScan}
+              onNotice={setNotice}
+              busy={running}
+              stamp={findings[0]?.checkedAt || ""}
+            />
           )}
           {page === "exposure" && (
             <SecurityPanel findings={findings} onNotice={setNotice} />
@@ -675,7 +688,10 @@ export default function App() {
               </div>
               <ProviderSettings key={resetEpoch} onNotice={setNotice} />
               <div className="setting">
-                <span>Delete all local data</span>
+                <span>
+                  Delete all local data
+                  <small>Exported reports stay where you saved them.</small>
+                </span>
                 <button
                   className="danger-button"
                   onClick={deleteAll}

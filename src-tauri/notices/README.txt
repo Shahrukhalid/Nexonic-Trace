@@ -1,0 +1,1 @@
+Packaging generates the exact dependency catalog, original license notices, standard license texts, and required source archives in this directory. Run scripts/notices.py before redistributing an application build. CI rejects unreviewed licenses or missing required source archives. Original Nexonic code is MIT licensed; dependency notices retain their upstream terms.
