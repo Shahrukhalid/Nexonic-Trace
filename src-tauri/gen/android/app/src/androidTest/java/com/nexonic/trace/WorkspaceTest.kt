@@ -17,7 +17,7 @@ class WorkspaceTest {
     fun launchesWithoutLoginAndNavigatesToSettings() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+        val intent = context.packageManager.getLaunchIntentForPackage("com.nexonic.trace")!!
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
         context.startActivity(intent)
         val device = UiDevice.getInstance(instrumentation)

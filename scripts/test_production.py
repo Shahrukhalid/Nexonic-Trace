@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import production
+from apk_checks import signer_fingerprint
 
 
 class ProductionInventoryTests(unittest.TestCase):
@@ -56,6 +57,18 @@ class ProductionInventoryTests(unittest.TestCase):
         file.write_bytes(original)
         self.change(lambda p:p['assets'].append(p['assets'][0]))
         with self.assertRaisesRegex(ValueError,'inventory'):production.validate_inventory(self.root,self.commit)
+
+
+class ApkSignerTests(unittest.TestCase):
+    def test_supported_formats_still_require_a_single_pinned_identity(self):
+        pin = 'a' * 64
+        old = f'Signer #1 certificate SHA-256 digest: {pin}\n'
+        modern = f'V2 Signer: certificate SHA-256 digest: {pin}\n'
+        for report in [old, modern, modern + modern.replace('V2', 'V3')]:
+            self.assertEqual(signer_fingerprint('Number of signers: 1\n' + report), pin)
+        self.assertIsNone(signer_fingerprint('Number of signers: 2\n' + old))
+        self.assertIsNone(signer_fingerprint('Number of signers: 1\n' + modern + modern.replace(pin, 'b' * 64)))
+        self.assertIsNone(signer_fingerprint('Number of signers: 1\n'))
 
 
 class MainAcceptanceTests(unittest.TestCase):

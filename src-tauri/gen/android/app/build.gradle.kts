@@ -18,7 +18,6 @@ val tauriProperties = Properties().apply {
 android {
     compileSdk = 36
     namespace = "com.nexonic.trace"
-    testBuildType = if (System.getenv("NEXONIC_TEST_RELEASE") == "1") "release" else "debug"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.nexonic.trace"
