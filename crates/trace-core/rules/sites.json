@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "sites": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "category": "Developer community",
+      "profileUrl": "https://github.com/{username}",
+      "apiUrl": "https://api.github.com/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$",
+      "positiveSignals": [
+        "matching login",
+        "positive numeric id",
+        "matching html_url",
+        "User or Organization type"
+      ],
+      "negativeSignals": [
+        "404 with message Not Found"
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "smoke-tested",
+      "lastVerified": "2026-11-08",
+      "priority": 1
+    },
+    {
+      "id": "dev",
+      "name": "DEV Community",
+      "category": "Developer community",
+      "profileUrl": "https://dev.to/{username}",
+      "apiUrl": "https://dev.to/api/users/by_username?url={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,29}$",
+      "positiveSignals": [
+        "matching username",
+        "positive numeric id",
+        "type_of user"
+      ],
+      "negativeSignals": [
+        "404 with status 404 and not-found error"
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "smoke-tested",
+      "lastVerified": "2026-11-08",
+      "priority": 2
+    },
+    {
+      "id": "codeberg",
+      "name": "Codeberg",
+      "category": "Developer community",
+      "profileUrl": "https://codeberg.org/{username}",
+      "apiUrl": "https://codeberg.org/api/v1/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$",
+      "positiveSignals": [
+        "matching login",
+        "positive numeric id",
+        "matching html_url"
+      ],
+      "negativeSignals": [
+        "404 with user-not-found message"
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "smoke-tested",
+      "lastVerified": "2026-11-08",
+      "priority": 3
+    },
+    {
+      "id": "lichess",
+      "name": "Lichess",
+      "category": "Gaming community",
+      "profileUrl": "https://lichess.org/@/{username}",
+      "apiUrl": "https://lichess.org/api/user/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{1,19}$",
+      "positiveSignals": [
+        "matching username and id",
+        "matching profile URL",
+        "numeric creation timestamp"
+      ],
+      "negativeSignals": [
+        "404 with Not found error"
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "smoke-tested",
+      "lastVerified": "2026-11-08",
+      "priority": 4
+    },
+    {
+      "id": "chess",
+      "name": "Chess.com",
+      "category": "Gaming community",
+      "profileUrl": "https://www.chess.com/member/{username}",
+      "apiUrl": "https://api.chess.com/pub/player/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{1,24}$",
+      "positiveSignals": [
+        "matching username",
+        "positive numeric player_id",
+        "matching url"
+      ],
+      "negativeSignals": [
+        "404 with player-not-found message"
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "smoke-tested",
+      "lastVerified": "2026-11-08",
+      "priority": 5
+    }
+  ]
+}

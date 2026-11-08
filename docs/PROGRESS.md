@@ -1,15 +1,11 @@
 # Development checkpoint
 
-- M0: application workspace, shared typed models, license/policies, lockfiles, and macOS/Windows CI implemented. Local build, type checks, formatting, Clippy, 5 frontend unit tests, 10 browser UI tests, and 13 Rust tests pass. Hosted CI is running in PR #1. Secret scanning/push protection and required CI checks are enabled.
-- M1: responsive application shell implemented. Native binary built and launched, but visual desktop verification is blocked because the Mac is locked. Android device validation is pending; a mobile browser smoke test is not an APK test.
-- M2: initial shared engine for two fixed public APIs, cancellation, bounded responses, and structured verification implemented.
-- M3–M4: hard-coded initial connectors and deterministic verification tests exist; versioned rule schema, broader fixtures, connector maintenance, and reliability certification remain.
-- M5–M12: not complete. Interface sections describe unavailable capabilities. No production release or signing claim.
+- M0: merged foundation in PR #1; all required CI passed. Secret scanning, push protection, and required checks enabled.
+- M1: redesigned to a minimal search workspace, compact results, and touch navigation. Native visual/device validation still pending.
+- M2–M4: five fixed public APIs; Quick/Deep/Comprehensive scopes of 2/4/5; bounded concurrency, global/per-domain pacing, one transient retry, cancellation, categorized outcomes, structured verification, and versioned rule validation implemented.
+- Live smoke checks: all five sources confirmed `thibault` and returned not found for `nt-zz-8f9e1c472a`. No ownership association is asserted. Dates recorded in rule metadata; regression fixtures test ambiguous, missing, blocked, and mismatched profiles.
+- Local checks: 18 core Rust tests, 1 native source-link test, 5 frontend utility tests, and 10 desktop/mobile UI tests pass; formatting, type/build checks, and Clippy pass. Hosted CI must pass before this milestone merges.
+- M5–M9 next: approved public-search connector, authorized non-sensitive breach data, password-prefix checks, public fields, opt-in SQLite history and reports.
+- M10–M12 next: full security/license gates, native platform/device validation, Windows/macOS/Android development packaging, signing credentials, and validated release publishing. Never call an unsigned test build a production release.
 
-Next: extend versioned connector definitions with source-specific syntax, positive/negative fixtures and validation dates; add global/per-domain scheduling before expanding coverage; implement SQLite opt-in persistence; initialize and validate Android tooling; implement authorized exposure providers and password prefix checks; complete packaging, security and license gates before release.
-
-Architecture review completed once. Independently implemented code; no external source/rule database incorporated. Use bounded async work, explicit cancellation, source-specific positive and negative signals, minimal evidence metadata, and narrow native capabilities. Avoid whole-page retention and arbitrary URL fetching. Re-run research only when a concrete compatibility or provider question requires it.
-
-Limited live validation: GitHub and DEV Community both confirmed `octocat` and `ben`; both returned not found for `nexonic-missing-8f9e1c472a`. This is a smoke check, not broad connector accuracy certification. Initial hosted macOS jobs used a retired runner; migrated to supported macOS 15.
-
-Desktop report exports use a native Save dialog through a narrow command, with user-selected destinations and bounded content. Native Save dialog interaction still needs manual validation on an unlocked desktop. Browser download APIs are not used for native exports.
+Architecture research completed once; no comparison source or database incorporated. Keep secrets session-only unless an OS-backed secure-storage adapter is explicitly implemented. Never persist passwords or hash material. Current app history is still session-only until the persistence milestone.
