@@ -93,3 +93,26 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("Could not start Nexonic Trace");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::reqwest_url;
+
+    #[test]
+    fn source_opening_accepts_only_generated_profile_links() {
+        for url in ["https://github.com/octocat", "https://dev.to/ben"] {
+            assert!(reqwest_url(url).is_ok());
+        }
+        for url in [
+            "http://github.com/octocat",
+            "https://github.com.evil.test/octocat",
+            "https://github.com/../admin",
+            "https://dev.to/ben?redirect=https://evil.test",
+            "https://127.0.0.1/",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+        ] {
+            assert!(reqwest_url(url).is_err());
+        }
+    }
+}

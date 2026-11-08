@@ -1,6 +1,6 @@
 # Development checkpoint
 
-- M0: application workspace, shared typed models, license/policies, lockfiles, and macOS/Windows CI implemented. Local build, type checks, formatting, Clippy, 5 frontend unit tests, 8 browser UI tests, and 12 Rust tests pass. Hosted CI is running in PR #1. Secret scanning/push protection and required CI checks are enabled.
+- M0: application workspace, shared typed models, license/policies, lockfiles, and macOS/Windows CI implemented. Local build, type checks, formatting, Clippy, 5 frontend unit tests, 10 browser UI tests, and 13 Rust tests pass. Hosted CI is running in PR #1. Secret scanning/push protection and required CI checks are enabled.
 - M1: responsive application shell implemented. Native binary built and launched, but visual desktop verification is blocked because the Mac is locked. Android device validation is pending; a mobile browser smoke test is not an APK test.
 - M2: initial shared engine for two fixed public APIs, cancellation, bounded responses, and structured verification implemented.
 - M3–M4: hard-coded initial connectors and deterministic verification tests exist; versioned rule schema, broader fixtures, connector maintenance, and reliability certification remain.

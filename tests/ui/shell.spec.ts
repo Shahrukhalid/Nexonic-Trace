@@ -39,3 +39,16 @@ test('layout fits viewport and search modes support keyboard interaction', async
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
 });
+
+test('help keeps keyboard focus inside the dialog and closes on Escape', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'About Nexonic Trace', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await page.getByRole('button', { name: 'Got it' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Close help' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'About Nexonic Trace', exact: true })).toBeFocused();
+});
