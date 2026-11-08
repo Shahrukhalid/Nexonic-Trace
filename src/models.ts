@@ -82,8 +82,9 @@ export function csvReport(findings: Finding[], redact = false): string {
   return [
     ["Website", "Status", "Source URL", "Evidence", "Checked at"],
     ...findings.map((f) => [
-      redact && f.category === "Public web mention"
-        ? "Public web result"
+      redact &&
+      ["Public web mention", "Dark-web index mention"].includes(f.category)
+        ? "Indexed result"
         : f.site,
       statusLabels[f.status],
       redact ? "[redacted]" : f.url,

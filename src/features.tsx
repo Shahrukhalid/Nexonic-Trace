@@ -64,6 +64,8 @@ export function SecurityPanel({
   const [checkedAt, setCheckedAt] = useState("");
   const [redactEmail, setRedactEmail] = useState(true);
   const [breachCheckedAt, setBreachCheckedAt] = useState("");
+  const [emailSource, setEmailSource] = useState("breaches");
+  const [stealerDomains, setStealerDomains] = useState<string[] | null>(null);
   const [email, setEmail] = useState("");
   const [authorized, setAuthorized] = useState(false);
   const [breaches, setBreaches] = useState<
@@ -118,8 +120,13 @@ export function SecurityPanel({
     }
     setBusy(true);
     setBreaches(null);
+    setStealerDomains(null);
     try {
-      setBreaches(await invoke("breach_check", { email, authorized }));
+      if (emailSource === "stealers")
+        setStealerDomains(
+          await invoke("stealer_log_check", { email, authorized }),
+        );
+      else setBreaches(await invoke("breach_check", { email, authorized }));
       setBreachCheckedAt(new Date().toISOString());
     } catch (error) {
       onNotice(message(error));
@@ -233,16 +240,38 @@ export function SecurityPanel({
       {tab === "email" && (
         <form onSubmit={breachCheck} className="feature-form">
           <p>
-            Uses your licensed Have I Been Pwned API key. Subscription charges
-            may apply. Only verified, non-sensitive breach records are
-            displayed.
+            Uses your licensed Have I Been Pwned key. Breaches show verified,
+            non-sensitive records. Stealer logs require a Pro plan and
+            provider-verified control of your email domain.
           </p>
+          <label>
+            Exposure source
+            <select
+              value={emailSource}
+              disabled={busy}
+              onChange={(e) => {
+                setEmailSource(e.target.value);
+                setBreaches(null);
+                setStealerDomains(null);
+              }}
+            >
+              <option value="breaches">Known breaches</option>
+              <option value="stealers">
+                Stealer logs (Pro + verified domain)
+              </option>
+            </select>
+          </label>
           <label>
             Email address
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setAuthorized(false);
+                setBreaches(null);
+                setStealerDomains(null);
+              }}
               required
               maxLength={254}
               disabled={busy}
@@ -257,9 +286,35 @@ export function SecurityPanel({
             I own this address or have permission to check it.
           </label>
           <button className="primary-button" disabled={busy || !authorized}>
-            {busy && <LoaderCircle className="spin" size={16} />}Check email
-            breaches
+            {busy && <LoaderCircle className="spin" size={16} />}
+            {emailSource === "stealers"
+              ? "Check stealer logs"
+              : "Check email breaches"}
           </button>
+          {stealerDomains !== null && (
+            <div className="check-result" role="status">
+              <h2>
+                {stealerDomains.length
+                  ? "Stealer-log exposure recorded"
+                  : "No stealer-log records returned"}
+              </h2>
+              <p>
+                {stealerDomains.length
+                  ? "The provider found this email in stealer logs associated with these services. Check devices for malware, revoke sessions and replace affected credentials from a clean device."
+                  : "This does not prove that your credentials have never been stolen."}
+              </p>
+              <div className="source-list">
+                {stealerDomains.map((domain) => (
+                  <span key={domain}>{domain}</span>
+                ))}
+              </div>
+              <small>
+                No passwords were requested or returned. Domains alone do not
+                verify a current email/password pair. Data: Have I Been Pwned ·
+                CC BY 4.0
+              </small>
+            </div>
+          )}
           {breaches && (
             <div role="status">
               {breaches.length === 0 ? (
@@ -416,7 +471,13 @@ export function HistoryPanel({
       : [];
   const comparable =
     comparison.length === 2 &&
-    comparison[0].query.toLowerCase() === comparison[1].query.toLowerCase();
+    comparison[0].query.toLowerCase() === comparison[1].query.toLowerCase() &&
+    comparison[0].mode
+      .replace(/_(quick|deep|comprehensive)$/, "")
+      .replace(/^(quick|deep|comprehensive)$/, "profiles") ===
+      comparison[1].mode
+        .replace(/_(quick|deep|comprehensive)$/, "")
+        .replace(/^(quick|deep|comprehensive)$/, "profiles");
   const changes = comparable
     ? Array.from(
         new Set(
@@ -499,8 +560,8 @@ export function HistoryPanel({
           <h2>Scan comparison</h2>
           {!comparable ? (
             <p>
-              Choose two searches for the same query. Different queries are not
-              linked into an identity.
+              Choose two searches for the same query and search area. Different
+              queries are not linked into an identity.
             </p>
           ) : changes.length === 0 ? (
             <p>No source-status changes between these scans.</p>
@@ -525,9 +586,14 @@ export function ProviderSettings({
 }) {
   const [provider, setProvider] = useState("brave");
   const [consent, setConsent] = useState(false);
-  const [status, setStatus] = useState<[boolean, boolean]>([false, false]);
+  const [status, setStatus] = useState<[boolean, boolean, boolean]>([
+    false,
+    false,
+    false,
+  ]);
   const [busy, setBusy] = useState(false);
   const key = useRef<HTMLInputElement>(null);
+  const publicKey = useRef<HTMLInputElement>(null);
   async function refresh() {
     if (isNative()) setStatus(await invoke("provider_status"));
   }
@@ -540,18 +606,25 @@ export function ProviderSettings({
       onNotice("Connect providers in the installed app.");
       return;
     }
-    const value = key.current?.value || "";
+    let value = key.current?.value || "";
+    let publicValue = publicKey.current?.value || "";
+    const connecting = !!value;
     if (key.current) key.current.value = "";
+    if (publicKey.current) publicKey.current.value = "";
     setBusy(true);
     try {
-      await invoke("configure_provider", {
+      const pending = invoke("configure_provider", {
         provider,
         key: value,
+        publicKey: publicValue,
         acceptCosts: consent,
       });
+      value = "";
+      publicValue = "";
+      await pending;
       await refresh();
       onNotice(
-        value
+        connecting
           ? "Provider connected for this session."
           : "Provider disconnected.",
       );
@@ -569,14 +642,37 @@ export function ProviderSettings({
         subscriptions or usage charges may apply; Nexonic does not set those
         prices.
       </p>
+      <a
+        href={
+          provider === "darkowl"
+            ? "https://www.darkowl.com/products/search-api/"
+            : provider === "hibp"
+              ? "https://haveibeenpwned.com/API/Key"
+              : "https://api-dashboard.search.brave.com/"
+        }
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => {
+          if (isNative()) {
+            event.preventDefault();
+            void openSource(event.currentTarget.href).catch((error) =>
+              onNotice(message(error)),
+            );
+          }
+        }}
+      >
+        Get provider access <ArrowUpRight size={13} />
+      </a>
       <form onSubmit={configure} className="feature-form">
         <label>
           Provider
           <select
+            aria-label="Provider"
             value={provider}
             onChange={(e) => {
               setProvider(e.target.value);
               if (key.current) key.current.value = "";
+              if (publicKey.current) publicKey.current.value = "";
               setConsent(false);
             }}
           >
@@ -586,10 +682,25 @@ export function ProviderSettings({
             <option value="hibp">
               Have I Been Pwned — {status[1] ? "connected" : "not connected"}
             </option>
+            <option value="darkowl">
+              DarkOwl — {status[2] ? "connected" : "not connected"}
+            </option>
           </select>
         </label>
+        {provider === "darkowl" && (
+          <label>
+            Public key
+            <input
+              ref={publicKey}
+              type="password"
+              autoComplete="off"
+              maxLength={512}
+              placeholder="DarkOwl public key"
+            />
+          </label>
+        )}
         <label>
-          API key
+          {provider === "darkowl" ? "Private key" : "API key"}
           <input
             ref={key}
             type="password"

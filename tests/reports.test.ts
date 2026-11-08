@@ -63,3 +63,28 @@ describe("evidence-backed exports", () => {
     expect(report.findings[0].checkedAt).toBe(finding.checkedAt);
   });
 });
+
+it("dark-web record IDs and fields disappear from redacted reports", async () => {
+  const finding = {
+    site: "DarkOwl · abcdef1234567890",
+    category: "Dark-web index mention",
+    url: "",
+    status: "inconclusive" as const,
+    evidence: ["metadata evidence"],
+    checkedAt: "2026-11-08T00:00:00Z",
+    publicFields: [{ label: "Record ID", value: "abcdef1234567890" }],
+  };
+  for (const format of ["json", "csv", "html"] as const) {
+    const text = await createReport(
+      format,
+      "private-query",
+      [finding],
+      true,
+      false,
+      1,
+    );
+    expect(text).not.toContain("abcdef1234567890");
+    expect(text).not.toContain("private-query");
+    expect(text).not.toContain("metadata evidence");
+  }
+});

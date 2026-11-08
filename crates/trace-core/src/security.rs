@@ -6,9 +6,15 @@ use sha1::{Digest, Sha1};
 use std::collections::HashSet;
 use zeroize::{Zeroize, Zeroizing};
 
+fn private_header(key: &str) -> Result<reqwest::header::HeaderValue, String> {
+    let mut value =
+        reqwest::header::HeaderValue::from_str(key).map_err(|_| "Invalid provider credential.")?;
+    value.set_sensitive(true);
+    Ok(value)
+}
 pub async fn bounded_body(mut response: Response) -> Result<(u16, String), String> {
     let status = response.status().as_u16();
-    let mut bytes = Vec::new();
+    let mut bytes = Zeroizing::new(Vec::new());
     while let Some(chunk) = response
         .chunk()
         .await
@@ -19,8 +25,8 @@ pub async fn bounded_body(mut response: Response) -> Result<(u16, String), Strin
         }
         bytes.extend_from_slice(&chunk);
     }
-    String::from_utf8(bytes)
-        .map(|body| (status, body))
+    std::str::from_utf8(&bytes)
+        .map(|body| (status, body.to_owned()))
         .map_err(|_| "The provider returned invalid text.".into())
 }
 pub fn provider_error(status: u16) -> String {
@@ -122,27 +128,6 @@ pub fn public_source_url(value: &str) -> bool {
         .iter()
         .any(|suffix| host.ends_with(suffix))
 }
-pub async fn public_search(query: &str, key: &str, limit: usize) -> Result<Vec<Finding>, String> {
-    if query.len() > 254 || query.trim().is_empty() || query.chars().any(char::is_control) {
-        return Err("Invalid public-search query.".into());
-    }
-    let client = http_client(20).map_err(|_| "Could not create the secure client.")?;
-    let response = client
-        .get("https://api.search.brave.com/res/v1/web/search")
-        .query(&[
-            ("q", format!("\"{query}\"")),
-            ("count", limit.clamp(1, 10).to_string()),
-        ])
-        .header("X-Subscription-Token", key)
-        .send()
-        .await
-        .map_err(|_| "Public-search provider unavailable.")?;
-    let (status, body) = bounded_body(response).await?;
-    if status != 200 {
-        return Err(provider_error(status));
-    }
-    parse_public_search(&body)
-}
 pub fn parse_public_search(body: &str) -> Result<Vec<Finding>, String> {
     let data: serde_json::Value =
         serde_json::from_str(body).map_err(|_| "Invalid search-provider data.")?;
@@ -152,7 +137,7 @@ pub fn parse_public_search(body: &str) -> Result<Vec<Finding>, String> {
         .ok_or("Search provider returned no valid results collection.")?;
     let mut seen = HashSet::new();
     let mut findings = Vec::new();
-    for result in results.iter().take(10) {
+    for result in results.iter().take(20) {
         let Some(url) = result["url"].as_str().filter(|url| public_source_url(url)) else {
             continue;
         };
@@ -208,7 +193,7 @@ pub async fn email_breaches(email: &str, key: &str) -> Result<Vec<Breach>, Strin
     let response = http_client(20)
         .map_err(|_| "Could not create the secure client.")?
         .get(url)
-        .header("hibp-api-key", key)
+        .header("hibp-api-key", private_header(key)?)
         .send()
         .await
         .map_err(|_| "Breach provider unavailable. No safety result was inferred.")?;
@@ -220,6 +205,55 @@ pub async fn email_breaches(email: &str, key: &str) -> Result<Vec<Breach>, Strin
         return Err(provider_error(status));
     }
     parse_breaches(&body)
+}
+pub fn parse_stealer_logs(body: &str) -> Result<Vec<String>, String> {
+    let domains: Vec<String> =
+        serde_json::from_str(body).map_err(|_| "Invalid stealer-log metadata.")?;
+    if domains.len() > 10_000 {
+        return Err("Stealer-log metadata exceeded the safety limit.".into());
+    }
+    let dns = regex::Regex::new(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$").unwrap();
+    let mut seen = HashSet::new();
+    Ok(domains
+        .into_iter()
+        .filter_map(|domain| {
+            let domain = domain.to_ascii_lowercase();
+            (dns.is_match(&domain)
+                && public_source_url(&format!("https://{domain}"))
+                && seen.insert(domain.clone()))
+            .then_some(domain)
+        })
+        .collect())
+}
+pub async fn stealer_logs(email: &str, key: &str) -> Result<Vec<String>, String> {
+    if !valid_email(email) {
+        return Err("Enter a valid email address.".into());
+    }
+    let mut url =
+        reqwest::Url::parse("https://haveibeenpwned.com/api/v3/stealerLogsByEmail/").unwrap();
+    url.path_segments_mut()
+        .map_err(|_| "Invalid provider endpoint.")?
+        .pop_if_empty()
+        .push(email);
+    let response = http_client(20)
+        .map_err(|_| "Could not create the secure client.")?
+        .get(url)
+        .header("hibp-api-key", private_header(key)?)
+        .send()
+        .await
+        .map_err(|_| "Stealer-log provider unavailable.")?;
+    let (status, body) = bounded_body(response).await?;
+    let body = Zeroizing::new(body);
+    if status == 404 {
+        return Ok(Vec::new());
+    }
+    if status == 403 {
+        return Err("Stealer logs require a Have I Been Pwned Pro plan and provider-verified control of this email domain.".into());
+    }
+    if status != 200 {
+        return Err(provider_error(status));
+    }
+    parse_stealer_logs(&body)
 }
 #[cfg(test)]
 mod tests {
@@ -266,6 +300,12 @@ mod tests {
     fn sensitive_and_unverified_breaches_are_not_disclosed() {
         let body = r#"[{"Name":"a","Title":"a","Domain":"example.com","BreachDate":"2020-01-01","DataClasses":["Emails"],"IsVerified":true,"IsSensitive":true}]"#;
         assert!(parse_breaches(body).unwrap().is_empty());
+    }
+    #[test]
+    fn stealer_metadata_contains_only_safe_deduplicated_domains() {
+        let records=parse_stealer_logs(r#"["Example.org","example.org","http://bad.onion/leak","password:secret","127.0.0.1","localhost","x.local","safe.example.org"]"#).unwrap();
+        assert_eq!(records, vec!["example.org", "safe.example.org"]);
+        assert!(parse_stealer_logs(r#"{"error":"not authorized"}"#).is_err());
     }
     #[test]
     fn email_validation_rejects_controls_and_paths() {

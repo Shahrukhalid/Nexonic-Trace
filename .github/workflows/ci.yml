@@ -49,3 +49,26 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: npm run tauri -- build --no-bundle
+      - name: Reject unsigned production executables
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_EXPECTED_PUBLISHER: Unsigned validation fixture
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts/sign_windows.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw 'Production signing script has syntax errors' }
+          try {
+            ./scripts/sign_windows.ps1 -Action Verify -Path target/release/nexonic-trace.exe
+            throw 'Unsigned executable was accepted'
+          } catch {
+            if ($_.Exception.Message -notlike '*trusted, timestamped Authenticode*') { throw }
+          }
+      - name: Verify actual release startup
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            python scripts/release_smoke.py target/release/nexonic-trace.exe
+          else
+            python3 scripts/release_smoke.py target/release/nexonic-trace
+          fi

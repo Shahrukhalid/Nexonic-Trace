@@ -1,0 +1,282 @@
+name: Production signing
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Signed candidate platforms
+        type: choice
+        options: [all, android, windows, macos]
+        default: all
+      publish:
+        description: Publish all platforms after production activation
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  policy:
+    name: Production source policy
+    if: github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    environment: production-signing
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      publish: ${{ steps.policy.outputs.publish }}
+      platform: ${{ steps.policy.outputs.platform }}
+      version: ${{ steps.policy.outputs.version }}
+      commit: ${{ steps.policy.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: policy
+        run: python3 scripts/production.py policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_REQUESTED: ${{ inputs.publish && 'true' || 'false' }}
+          SELECTED_PLATFORM: ${{ inputs.platform || 'all' }}
+          PRODUCTION_RELEASES_ENABLED: ${{ vars.PRODUCTION_RELEASES_ENABLED }}
+  windows:
+    name: Signed Windows candidate
+    needs: policy
+    if: needs.policy.outputs.platform == 'all' || needs.policy.outputs.platform == 'windows'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    environment: production-signing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE }}
+      WINDOWS_EXPECTED_PUBLISHER: ${{ vars.WINDOWS_EXPECTED_PUBLISHER }}
+      WINDOWS_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_CERTIFICATE_THUMBPRINT }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+      AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/production.py stage --platform windows
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      - if: vars.WINDOWS_SIGNING_MODE == 'pfx'
+        run: ./scripts/sign_windows.ps1 -Action Import
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      - if: vars.WINDOWS_SIGNING_MODE == 'azure'
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: npm ci
+      - run: python scripts/notices.py --target x86_64-pc-windows-msvc
+      - run: npm run tauri -- build --no-bundle --ci
+      - if: vars.WINDOWS_SIGNING_MODE == 'pfx'
+        run: ./scripts/sign_windows.ps1 -Action Sign -Path target/release/nexonic-trace.exe
+      - if: vars.WINDOWS_SIGNING_MODE == 'azure'
+        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files: ${{ github.workspace }}\target\release\nexonic-trace.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - run: ./scripts/sign_windows.ps1 -Action Verify -Path target/release/nexonic-trace.exe
+      - run: npm run tauri -- bundle --bundles nsis --ci
+      - if: vars.WINDOWS_SIGNING_MODE == 'pfx'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem target/release/bundle/nsis/*.exe)
+          if ($installers.Count -ne 1) { throw 'Expected one production installer' }
+          ./scripts/sign_windows.ps1 -Action Sign -Path $installers[0].FullName
+      - if: vars.WINDOWS_SIGNING_MODE == 'azure'
+        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\target\release\bundle\nsis
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - run: python scripts/production.py windows
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-windows
+          path: production-assets/*
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        shell: pwsh
+        run: |
+          ./scripts/sign_windows.ps1 -Action Cleanup
+          python scripts/production.py cleanup
+  macos:
+    name: Signed macOS candidate (${{ matrix.os }})
+    needs: policy
+    if: needs.policy.outputs.platform == 'all' || needs.policy.outputs.platform == 'macos'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    environment: production-signing
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+      APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: python3 scripts/production.py stage --platform macos
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_API_PRIVATE_KEY_BASE64 }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: npm ci
+      - run: python3 scripts/notices.py --target ${{ matrix.target }}
+      - run: npm run tauri -- build --bundles app,dmg --ci
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ vars.APPLE_API_KEY_ID }}
+      - run: python3 scripts/production.py macos
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-${{ matrix.target }}
+          path: production-assets/*
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        run: python3 scripts/production.py cleanup
+  android:
+    name: Signed Android candidate
+    needs: policy
+    if: needs.policy.outputs.platform == 'all' || needs.policy.outputs.platform == 'android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production-signing
+    env:
+      NDK_VERSION: 27.3.13750724
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+      NEXONIC_TEST_RELEASE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: python3 scripts/production.py stage --platform android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: gradle/actions/wrapper-validation@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+      - run: npm ci
+      - run: |
+          sdkmanager "ndk;$NDK_VERSION" 'platforms;android-36'
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - run: npm run tauri -- android init --ci --skip-targets-install
+      - run: npm run tauri -- android build --apk --target aarch64 armv7 x86_64 --split-per-abi --ci
+      - run: |
+          src-tauri/gen/android/gradlew -p src-tauri/gen/android --no-configuration-cache :app:collectRuntimeNotices
+          python3 scripts/notices.py --target aarch64-linux-android --maven-manifest src-tauri/gen/android/app/build/runtime-dependencies.tsv
+          mkdir -p src-tauri/gen/android/app/src/main/assets/notices
+          cp -R src-tauri/notices/. src-tauri/gen/android/app/src/main/assets/notices/
+      - run: npm run tauri -- android build --apk --target aarch64 armv7 x86_64 --split-per-abi --ci
+      - run: src-tauri/gen/android/gradlew -p src-tauri/gen/android :app:assembleX86_64ReleaseAndroidTest -x :app:rustBuildX86_64Release
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          avd-name: NexonicTraceTest
+          disable-animations: true
+          cores: 2
+          ram-size: 2048M
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -feature -Vulkan
+          script: timeout 600 python3 scripts/android_release_smoke.py
+      - run: python3 scripts/production_android.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-android
+          path: production-assets/*
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        run: python3 scripts/production.py cleanup
+  publish:
+    name: Publish verified production release
+    needs: [policy, windows, macos, android]
+    if: always() && needs.policy.outputs.publish == 'true' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.android.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production-signing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: production-*
+          path: production-assets
+          merge-multiple: true
+      - run: python3 scripts/production.py inventory
+      - name: Publish only an existing matching production tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ needs.policy.outputs.version }}
+        run: gh release create "$RELEASE_TAG" production-assets/* --verify-tag --title "Nexonic Trace $RELEASE_TAG" --notes-file docs/PRODUCTION-RELEASE.md

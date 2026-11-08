@@ -352,6 +352,9 @@ h1 {
   margin-top: 19px;
 }
 .notice {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 15px;
@@ -1065,4 +1068,38 @@ input[type="checkbox"] {
 }
 .recent-scans button:hover {
   background: var(--raised);
+}
+
+.search-scope {
+  margin-bottom: 18px;
+  width: fit-content;
+  max-width: 100%;
+}
+.search-scope label {
+  cursor: pointer;
+}
+.search-authorization {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.coverage-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 16px 0;
+  line-height: 1.6;
+}
+.evidence-fields {
+  margin: 14px 0;
+  font-size: 12px;
+}
+.evidence-fields dt {
+  color: var(--muted);
+}
+.evidence-fields dd {
+  margin: 2px 0 10px;
+  overflow-wrap: anywhere;
+}
+.finding h3 {
+  overflow-wrap: anywhere;
 }

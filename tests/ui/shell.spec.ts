@@ -41,6 +41,7 @@ test("navigation, theme persistence, and data deletion work", async ({
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Delete all data" }).click();
   await expect(page.getByRole("status")).toContainText("have been cleared");
+  await expect(page.getByRole("status")).toBeInViewport();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 

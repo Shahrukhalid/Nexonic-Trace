@@ -170,9 +170,71 @@ pub fn data_directory(normal: PathBuf) -> Result<(PathBuf, bool), String> {
     }
     Ok((normal, false))
 }
+/// Verification may only use a caller-created, marked directory directly in
+/// the OS temp folder. It cannot redirect the app into an existing user profile.
+pub fn verification_directory(
+    root: &Path,
+    normal: PathBuf,
+    portable: bool,
+) -> Result<PathBuf, String> {
+    let temporary = std::env::temp_dir()
+        .canonicalize()
+        .map_err(|_| "Cannot locate temporary directory.")?;
+    let root = root
+        .canonicalize()
+        .map_err(|_| "Verification directory must already exist.")?;
+    if root.parent() != Some(temporary.as_path())
+        || !root.file_name().is_some_and(|name| {
+            name.to_string_lossy()
+                .starts_with("NexonicTraceAcceptance-")
+        })
+        || std::fs::read(root.join(".nexonic-release-verification"))
+            .ok()
+            .as_deref()
+            != Some(b"v1\n")
+    {
+        return Err("Verification requires a marked, isolated temporary directory.".into());
+    }
+    if portable {
+        let parent = normal
+            .parent()
+            .ok_or("Invalid portable data location.")?
+            .canonicalize()
+            .map_err(|_| "Cannot locate portable directory.")?;
+        if !parent.starts_with(&root) || normal.exists() {
+            return Err("Portable verification requires a clean application copy inside the verification directory.".into());
+        }
+        Ok(normal)
+    } else {
+        Ok(root.join("data"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn verification_refuses_unmarked_and_existing_user_data() {
+        let root = std::env::temp_dir().join(format!(
+            "NexonicTraceAcceptance-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let normal = root.join("existing-user-data");
+        assert!(verification_directory(&root, normal.clone(), false).is_err());
+        std::fs::write(root.join(".nexonic-release-verification"), b"v1\n").unwrap();
+        assert_eq!(
+            verification_directory(&root, normal.clone(), false).unwrap(),
+            root.canonicalize().unwrap().join("data")
+        );
+        std::fs::create_dir(&normal).unwrap();
+        assert!(verification_directory(&root, normal, true).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn history_is_opt_in_and_deletable() {
         let store = Store::initialize(Connection::open_in_memory().unwrap()).unwrap();
