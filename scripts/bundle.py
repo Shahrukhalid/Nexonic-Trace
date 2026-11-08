@@ -7,6 +7,7 @@ import platform
 import plistlib
 import re
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,7 +52,15 @@ def transient_failure(output):
     ])
 
 
+def configure_output():
+    # Windows pipes can default to cp1252, while Vite emits Unicode status marks.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='replace')
+
+
 def main():
+    configure_output()
     parser = argparse.ArgumentParser()
     parser.add_argument('--bundles', choices=['nsis', 'app,dmg'], required=True)
     args = parser.parse_args()

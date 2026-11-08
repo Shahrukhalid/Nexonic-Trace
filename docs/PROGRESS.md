@@ -1,6 +1,6 @@
 # Development status
 
-The simplified app and all development packaging milestones are merged through PRs #1, #9–#14. [v0.1.0-dev.3](https://github.com/Shahrukhalid/Nexonic-Trace/releases/tag/v0.1.0-dev.3) was published from commit `75f2631` after the [complete release workflow passed](https://github.com/Shahrukhalid/Nexonic-Trace/actions/runs/42480723048). Its eight downloadable packages independently match the published SHA-256 checksums and validation records.
+The simplified app and development packaging are implemented. The latest validated downloads are listed in [GitHub Releases](https://github.com/Shahrukhalid/Nexonic-Trace/releases). An independent handoff audit confirmed that [v0.1.0-dev.3](https://github.com/Shahrukhalid/Nexonic-Trace/releases/tag/v0.1.0-dev.3) was published from commit `75f2631` after the [complete release workflow passed](https://github.com/Shahrukhalid/Nexonic-Trace/actions/runs/42480723048). Its eight downloadable packages independently match the published SHA-256 checksums and validation records.
 
 - M0–M1: protected required checks, original branding, minimal desktop/mobile navigation, compact evidence, keyboard controls and light/dark themes.
 - M2–M4: five fixed official public APIs, versioned rules, conservative verification, 2/4/5-source scopes, bounded responses/concurrency, pacing, retry and cancellation. Limited live positive/missing-account probes passed on 2026-11-08. Matching usernames never establish ownership.
@@ -12,9 +12,11 @@ The simplified app and all development packaging milestones are merged through P
 
 ## Continuation after dev.3
 
-The pending frontend/toolchain and Rust-cache dependency updates are combined for compatibility testing. Packaging now requires the compiler's actual `COPYRIGHT-library.html`, records the source commit and Android test ABI, rejects mixed-commit or unexpected payloads, and limits disk cleanup to images under this build's output directory. These changes supersede dev.3's packaging once the continuation passes every required hosted gate and a new development tag publishes.
+The frontend/toolchain and Rust-cache dependency updates are combined for compatibility across the native platforms. Packaging now requires the compiler's actual `COPYRIGHT-library.html`, records the source commit and Android test ABI, rejects mixed-commit or unexpected payloads, and limits disk cleanup to images under this build's output directory. Every updated development release must pass all nine required hosted checks before its assets can publish. Updated validation records tie every package to that release's exact source commit.
 
-The most recent main run after dev.3 failed when its Android emulator disconnected during instrumentation. Another dependency run exposed a Settings startup read that never completed. The continuation adds read-only recovery without enabling history or writing fallback settings, plus diagnostic capture for native test failures. All native gates remain mandatory.
+Startup-settings recovery retries only local reads, remains disabled on persistent failures, offers an explicit reload control, and cancels pending reads during deletion. It never enables history or writes fallback settings in response to a read failure. Native Android failures preserve screenshots and instrumentation evidence; all native acceptance gates remain mandatory.
+
+Current local regression suite: 27 Rust tests, 12 frontend/report/startup tests, 22 desktop/mobile interaction tests and ten packaging/provenance tests. Type/build, format, dependency audits and actual Apple Silicon package acceptance pass. Hosted jobs independently validate Windows, both Mac architectures and the Android emulator for each commit.
 
 Production distribution remains blocked by absent protected signing credentials and production acceptance. Windows development files are unsigned; Mac files use ad-hoc signing without notarization; Android uses development certificates. No production release or independent security certification is claimed.
 

@@ -1,6 +1,9 @@
 """Regression coverage for package notices and bounded disk-image cleanup."""
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -37,6 +40,13 @@ class PackagingTests(unittest.TestCase):
             info = {'images': [{'image-path': str(root/'link.dmg'),
                                 'system-entities': [{'dev-entry': '/dev/disk8'}]}]}
             self.assertEqual(bundle.owned_dmg_devices(info, root), [])
+
+    def test_unicode_build_output_survives_windows_legacy_encoding(self):
+        environment = dict(os.environ, PYTHONIOENCODING='cp1252', PYTHONPATH=str(Path(__file__).resolve().parent))
+        result = subprocess.run([sys.executable, '-c', "import bundle; bundle.configure_output(); print('\\u2713 package')"],
+                                env=environment, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.decode('utf-8').splitlines(), ['\u2713 package'])
 
     def test_only_transient_errors_are_retried(self):
         self.assertTrue(bundle.transient_failure('hdiutil: Resource busy'))
