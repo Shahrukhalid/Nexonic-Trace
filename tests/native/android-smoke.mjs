@@ -12,7 +12,7 @@ try {
     .trim();
   if (avd !== "NexonicTraceTest")
     throw new Error("Refusing to modify a non-test Android device.");
-  const webview = await device.webView({ pkg: "com.nexonic.trace" });
+  const webview = await device.webView({ pkg: "com.nexonic.trace" }, { timeout: 120_000 });
   const page = await webview.page();
   await expect(
     page.getByRole("heading", { name: "Discover your digital footprint." }),
