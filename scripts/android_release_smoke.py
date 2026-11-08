@@ -31,9 +31,9 @@ result=subprocess.run([tools/'apksigner','sign','--ks',os.environ['NEXONIC_ANDRO
 if result.returncode: raise SystemExit('Release instrumentation signing failed')
 command('install','-r',apps[0]);command('install','-r','-t',signed)
 command('shell','pm','clear','com.nexonic.trace')
-output=command('shell','am','instrument','-w','-e','class','com.nexonic.trace.WorkspaceTest',
+output=command('shell','am','instrument','-w','-r','-e','class','com.nexonic.trace.WorkspaceTest',
                'com.nexonic.trace.test/androidx.test.runner.AndroidJUnitRunner')
-if not re.search(r'OK \([1-9][0-9]* tests?\)',output) or 'FAILURES!!!' in output or 'INSTRUMENTATION_CODE: -1' not in output:
+if not re.search(r'OK \([1-9][0-9]* tests?\)',output) or 'FAILURES!!!' in output or not re.search(r'^INSTRUMENTATION_CODE: -1\s*$', output, re.MULTILINE) or not re.search(r'^INSTRUMENTATION_STATUS_CODE: 0\s*$', output, re.MULTILINE):
     print(output)
     raise SystemExit('Actual signed release UI instrumentation failed')
 proof={'passed':True,'testedAbi':command('shell','getprop','ro.product.cpu.abi').strip(),'certificateSha256':expected}

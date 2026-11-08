@@ -58,6 +58,28 @@ class ProductionInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'inventory'):production.validate_inventory(self.root,self.commit)
 
 
+class MainAcceptanceTests(unittest.TestCase):
+    def test_same_commit_tag_cannot_replace_main_evidence(self):
+        commit = 'a' * 40
+        def api(command, **kwargs):
+            endpoint = command[-1]
+            if '/workflows/' in endpoint:
+                run_id = 1 if '/ci.yml/' in endpoint else 2
+                return json.dumps({'workflow_runs': [
+                    {'id': 99, 'head_sha': commit, 'head_branch': 'v0.1.0-dev.5', 'event': 'push', 'conclusion': None},
+                    {'id': run_id, 'head_sha': commit, 'head_branch': 'main', 'event': 'push', 'conclusion': 'success'},
+                ]})
+            names = production.REQUIRED[:3] if '/runs/1/' in endpoint else production.REQUIRED[3:]
+            return json.dumps({'jobs': [{'name': name, 'conclusion': 'success'} for name in names]})
+        with patch('production.run', side_effect=api):
+            production.require_main_acceptance(commit)
+        with patch('production.run', return_value=json.dumps({'workflow_runs': [
+            {'id': 99, 'head_sha': commit, 'head_branch': 'v0.1.0-dev.5', 'event': 'push', 'conclusion': 'success'},
+        ]})):
+            with self.assertRaisesRegex(ValueError, 'on main'):
+                production.require_main_acceptance(commit)
+
+
 class SigningMaterialTests(unittest.TestCase):
     def test_missing_credentials_fail_before_creating_files(self):
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'RUNNER_TEMP':directory,'GITHUB_ENV':str(Path(directory)/'environment')},clear=True):

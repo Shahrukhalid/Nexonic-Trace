@@ -26,7 +26,7 @@ jobs:
     environment: production-signing
     permissions:
       contents: read
-      checks: read
+      actions: read
     outputs:
       publish: ${{ steps.policy.outputs.publish }}
       platform: ${{ steps.policy.outputs.platform }}
