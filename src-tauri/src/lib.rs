@@ -3,7 +3,6 @@ mod features;
 use std::time::{Duration, Instant};
 use tauri::ipc::Channel;
 use tauri::Manager;
-use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -71,7 +70,12 @@ async fn start_search(
 }
 
 #[tauri::command]
-async fn cancel_search(state: tauri::State<'_, SearchState>, job_id: String) -> Result<(), String> {
+async fn cancel_search(
+    state: tauri::State<'_, SearchState>,
+    features: tauri::State<'_, features::Features>,
+    job_id: String,
+) -> Result<(), String> {
+    features.cancel_web(&job_id).await;
     if let Some((id, token)) = &*state.active.lock().await {
         if id == &job_id {
             token.cancel();
@@ -110,37 +114,6 @@ fn reqwest_url(url: &str) -> Result<String, String> {
     Err("Unsupported source URL.".into())
 }
 
-#[tauri::command]
-async fn save_report(
-    app: tauri::AppHandle,
-    format: String,
-    content: String,
-) -> Result<bool, String> {
-    if !["json", "csv"].contains(&format.as_str()) || content.len() > 2_097_152 {
-        return Err("Unsupported report format or report size.".into());
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        let Some(file) = app
-            .dialog()
-            .file()
-            .set_title("Save Nexonic Trace report")
-            .set_file_name(format!("NexonicTrace-Report.{format}"))
-            .add_filter("Report", &[&format])
-            .blocking_save_file()
-        else {
-            return Ok(false);
-        };
-        let path = file
-            .into_path()
-            .map_err(|_| "This destination is not supported by this development build.")?;
-        std::fs::write(path, content)
-            .map_err(|_| "The report could not be written. Choose a writable destination.")?;
-        Ok(true)
-    })
-    .await
-    .map_err(|_| "The save dialog could not finish.")?
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -160,7 +133,6 @@ pub fn run() {
             start_search,
             cancel_search,
             open_source,
-            save_report,
             features::get_preferences,
             features::set_preferences,
             features::list_scans,

@@ -121,14 +121,17 @@ pub fn public_source_url(value: &str) -> bool {
         .iter()
         .any(|suffix| host.ends_with(suffix))
 }
-pub async fn public_search(query: &str, key: &str) -> Result<Vec<Finding>, String> {
+pub async fn public_search(query: &str, key: &str, limit: usize) -> Result<Vec<Finding>, String> {
     if query.len() > 254 || query.trim().is_empty() || query.chars().any(char::is_control) {
         return Err("Invalid public-search query.".into());
     }
     let client = http_client(20).map_err(|_| "Could not create the secure client.")?;
     let response = client
         .get("https://api.search.brave.com/res/v1/web/search")
-        .query(&[("q", format!("\"{query}\"")), ("count", "10".into())])
+        .query(&[
+            ("q", format!("\"{query}\"")),
+            ("count", limit.clamp(1, 10).to_string()),
+        ])
         .header("X-Subscription-Token", key)
         .send()
         .await

@@ -2,6 +2,7 @@ use crate::data::{Preferences, SavedScan, Store};
 use std::time::{Duration, Instant};
 use tauri::State;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use trace_core::security::{Breach, PasswordCheck};
 use zeroize::Zeroizing;
 
@@ -14,6 +15,7 @@ pub struct Features {
     pub store: Mutex<Store>,
     keys: Mutex<Keys>,
     last_call: Mutex<Option<Instant>>,
+    web_job: Mutex<Option<(String, CancellationToken)>>,
 }
 impl Features {
     pub fn new(store: Store) -> Self {
@@ -21,6 +23,14 @@ impl Features {
             store: Mutex::new(store),
             keys: Mutex::new(Keys::default()),
             last_call: Mutex::new(None),
+            web_job: Mutex::new(None),
+        }
+    }
+    pub async fn cancel_web(&self, id: &str) {
+        if let Some((job, token)) = &*self.web_job.lock().await {
+            if job == id {
+                token.cancel();
+            }
         }
     }
     async fn rate_limit(&self) -> Result<(), String> {
@@ -104,25 +114,48 @@ pub async fn public_web_search(
     state: State<'_, Features>,
     query: String,
     job_id: String,
+    mode: String,
 ) -> Result<trace_core::SearchSummary, String> {
-    state.rate_limit().await?;
+    if job_id.is_empty() || job_id.len() > 64 {
+        return Err("Invalid search identifier.".into());
+    }
+    let limit = match mode.as_str() {
+        "quick" => 3,
+        "deep" => 6,
+        "comprehensive" => 10,
+        _ => return Err("Unsupported search mode.".into()),
+    };
     let key = state.keys.lock().await.brave.clone();
     if key.is_empty() {
         return Err("No provider is connected. Add a Brave Search key in Settings; provider charges may apply.".into());
     }
-    let findings = trace_core::security::public_search(&query, &key).await?;
+    state.rate_limit().await?;
+    let token = CancellationToken::new();
+    {
+        let mut job = state.web_job.lock().await;
+        if job.is_some() {
+            return Err("A public-web search is already running.".into());
+        }
+        *job = Some((job_id.clone(), token.clone()));
+    }
+    let result = tokio::select! {biased;_=token.cancelled()=>Ok(None),result=trace_core::security::public_search(&query,&key,limit)=>result.map(Some)};
+    *state.web_job.lock().await = None;
+    let result = result?;
+    let canceled = result.is_none();
+    let findings = result.unwrap_or_default();
     let mut summary = trace_core::SearchSummary {
         job_id,
         total: findings.len(),
         findings,
-        canceled: false,
+        canceled,
         warnings: vec![],
     };
-    if let Err(error) = state
-        .store
-        .lock()
-        .await
-        .record(&query, "public_web", &summary)
+    if let Err(error) =
+        state
+            .store
+            .lock()
+            .await
+            .record(&query, &format!("public_web_{mode}"), &summary)
     {
         summary.warnings.push(error);
     }
@@ -134,6 +167,9 @@ pub async fn breach_check(
     email: String,
     authorized: bool,
 ) -> Result<Vec<Breach>, String> {
+    if email.ends_with("@hibp-integration-tests.com") {
+        return Err("Integration-test addresses are not displayed as real exposure. Use the explicit development security probe for provider fixtures.".into());
+    }
     if !authorized {
         return Err("Confirm that you own this address or have permission to check it.".into());
     }
