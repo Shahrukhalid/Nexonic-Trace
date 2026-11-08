@@ -89,9 +89,26 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: python scripts/notices.py --target ${{ matrix.target }}
-      - run: npm run tauri -- build --debug --bundles ${{ matrix.bundles }} --ci
+      - name: Cache bundler tools (NSIS)
+        if: runner.os == 'Windows'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~\AppData\Local\tauri
+          key: tauri-bundler-tools-${{ runner.os }}-v1
+      - name: Build and bundle (retries transient download and disk-image errors)
+        shell: bash
         env:
           APPLE_SIGNING_IDENTITY: '-'
+        run: |
+          for attempt in 1 2 3; do
+            npm run tauri -- build --debug --bundles ${{ matrix.bundles }} --ci && exit 0
+            echo "::warning::Bundling attempt $attempt failed; retrying"
+            if [ "$RUNNER_OS" = macOS ]; then
+              hdiutil info | awk '/\/dev\/disk/ {print $1}' | xargs -n1 hdiutil detach -force >/dev/null 2>&1 || true
+            fi
+            sleep 20
+          done
+          exit 1
       - run: python scripts/package_desktop.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
