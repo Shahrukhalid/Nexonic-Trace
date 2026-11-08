@@ -18,7 +18,7 @@
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-fs": "^2.7.1",
     "jspdf": "^4.2.1",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.69.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
