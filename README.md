@@ -6,6 +6,8 @@ By Nexonic Technologies
 
 A local-first public-profile discovery and exposure-checking application for Windows, macOS, and Android. Core username searches and password checks need no Nexonic account, hosted backend, subscription, or AI service.
 
+![Simplified desktop workspace](docs/images/nexonic-trace-desktop.png)
+
 ## Features
 
 - Minimal React/TypeScript interface with light/dark themes, compact evidence cards, keyboard controls, and touch navigation.
@@ -20,6 +22,13 @@ A local-first public-profile discovery and exposure-checking application for Win
 - JSON, CSV, HTML, and PDF report exports with redaction. HTML is escaped and contains no scripts/external resources; CSV neutralizes formula prefixes. PDF preserves unsupported Unicode using explicit code-point notation. Native Save dialogs support platform file destinations.
 
 Provider keys are session-only and cleared when the app closes or data is deleted. They are never written to the local database. Provider plans must permit the user's intended requests, retention, and exports. Nexonic does not set provider prices.
+
+<details>
+<summary>Android workspace</summary>
+
+<img src="docs/images/nexonic-trace-android.png" width="300" alt="Actual Android search workspace" />
+
+</details>
 
 ## Coverage and limits
 
@@ -67,6 +76,6 @@ Delete All Data removes saved scans, ordinary preferences, in-memory provider ke
 
 ## Distribution
 
-Development build status and remaining platform/signing blockers are recorded in `docs/PROGRESS.md`. Production certificates, notarization credentials, and Android release keys must be supplied through protected CI secrets and never committed. Development artifacts must be clearly labeled; no signing or production-readiness claims are made without successful verification. Linux and iOS applications are outside scope.
+Development build status is recorded in [progress](docs/PROGRESS.md), with [packaging gates](docs/PACKAGING.md) and [dependency audit scope](docs/SECURITY-AUDIT.md). Validated test downloads appear in [GitHub Releases](https://github.com/Shahrukhalid/Nexonic-Trace/releases). Production certificates, notarization credentials, and Android release keys must be supplied through protected CI secrets and never committed. Development artifacts must be clearly labeled; no signing or production-readiness claims are made without successful verification. Linux and iOS applications are outside scope.
 
 Original code: [MIT](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md), [contributing](CONTRIBUTING.md), and [security policy](SECURITY.md).

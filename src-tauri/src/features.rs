@@ -16,6 +16,7 @@ pub struct Features {
     keys: Mutex<Keys>,
     last_call: Mutex<Option<Instant>>,
     web_job: Mutex<Option<(String, CancellationToken)>>,
+    check_cancel: Mutex<CancellationToken>,
 }
 impl Features {
     pub fn new(store: Store) -> Self {
@@ -24,6 +25,7 @@ impl Features {
             keys: Mutex::new(Keys::default()),
             last_call: Mutex::new(None),
             web_job: Mutex::new(None),
+            check_cancel: Mutex::new(CancellationToken::new()),
         }
     }
     pub async fn cancel_web(&self, id: &str) {
@@ -58,6 +60,10 @@ pub async fn list_scans(state: State<'_, Features>) -> Result<Vec<SavedScan>, St
     state.store.lock().await.scans()
 }
 #[tauri::command]
+pub async fn recent_scans(state: State<'_, Features>) -> Result<Vec<SavedScan>, String> {
+    state.store.lock().await.recent_scans()
+}
+#[tauri::command]
 pub async fn delete_scan(state: State<'_, Features>, id: String) -> Result<(), String> {
     state.store.lock().await.delete_scan(&id)
 }
@@ -67,6 +73,14 @@ pub async fn clear_history(state: State<'_, Features>) -> Result<(), String> {
 }
 #[tauri::command]
 pub async fn delete_all_data(state: State<'_, Features>) -> Result<(), String> {
+    {
+        let mut token = state.check_cancel.lock().await;
+        token.cancel();
+        *token = CancellationToken::new();
+    }
+    if let Some((_, token)) = &*state.web_job.lock().await {
+        token.cancel();
+    }
     *state.keys.lock().await = Keys::default();
     state.store.lock().await.clear(true)
 }
@@ -106,8 +120,9 @@ pub async fn password_check(
     password: String,
 ) -> Result<PasswordCheck, String> {
     let password = Zeroizing::new(password);
+    let cancellation = state.check_cancel.lock().await.clone();
     state.rate_limit().await?;
-    trace_core::security::check_password(password).await
+    tokio::select! {biased;_=cancellation.cancelled()=>Err("Security check canceled.".into()),result=trace_core::security::check_password(password)=>result}
 }
 #[tauri::command]
 pub async fn public_web_search(
@@ -167,13 +182,16 @@ pub async fn breach_check(
     email: String,
     authorized: bool,
 ) -> Result<Vec<Breach>, String> {
-    if email.ends_with("@hibp-integration-tests.com") {
+    if email
+        .to_ascii_lowercase()
+        .ends_with("@hibp-integration-tests.com")
+    {
         return Err("Integration-test addresses are not displayed as real exposure. Use the explicit development security probe for provider fixtures.".into());
     }
     if !authorized {
         return Err("Confirm that you own this address or have permission to check it.".into());
     }
-    state.rate_limit().await?;
+    let cancellation = state.check_cancel.lock().await.clone();
     let key = state.keys.lock().await.hibp.clone();
     if key.is_empty() {
         return Err(
@@ -181,5 +199,6 @@ pub async fn breach_check(
                 .into(),
         );
     }
-    trace_core::security::email_breaches(&email, &key).await
+    state.rate_limit().await?;
+    tokio::select! {biased;_=cancellation.cancelled()=>Err("Security check canceled.".into()),result=trace_core::security::email_breaches(&email,&key)=>result}
 }

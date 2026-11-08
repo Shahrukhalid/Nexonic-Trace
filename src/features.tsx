@@ -85,19 +85,21 @@ export function SecurityPanel({
       onNotice("Open the installed app to check a password privately.");
       return;
     }
-    const value = password.current?.value || "";
+    let value = password.current?.value || "";
     if (!value) return;
     setCount(null);
     setBusy(true);
     // Clear the input immediately. The owned Rust buffer is zeroized after hashing.
     if (password.current) password.current.value = "";
     try {
-      const result = await invoke<{ occurrences: number; checkedAt: string }>(
+      const pending = invoke<{ occurrences: number; checkedAt: string }>(
         "password_check",
         {
           password: value,
         },
       );
+      value = "";
+      const result = await pending;
       setCount(result.occurrences);
       setCheckedAt(result.checkedAt);
     } catch (error) {
@@ -446,8 +448,8 @@ export function HistoryPanel({
         </button>
       </div>
       <p className="muted">
-        Up to 100 recent searches. Enable saving in Settings. Select two scans
-        of the same query to compare.
+        Keeps the 100 most recent searches. Enable saving in Settings. Select
+        two scans of the same query to compare.
       </p>
       {scans.length === 0 ? (
         <div className="empty">
@@ -652,6 +654,49 @@ export function ExportPanel({
           >
             {format.toUpperCase()}
             <Download size={16} />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function RecentScans({
+  onLoad,
+  onNotice,
+  busy,
+  stamp,
+}: {
+  onLoad: (scan: SavedScan) => void;
+  onNotice: (notice: string) => void;
+  busy: boolean;
+  stamp: string;
+}) {
+  const [scans, setScans] = useState<SavedScan[]>([]);
+  useEffect(() => {
+    if (!isNative() || busy) return;
+    let active = true;
+    void invoke<SavedScan[]>("recent_scans")
+      .then((scans) => {
+        if (active) setScans(scans);
+      })
+      .catch((error) => onNotice(message(error)));
+    return () => {
+      active = false;
+    };
+  }, [busy, stamp]);
+  if (!scans.length) return null;
+  return (
+    <section className="recent-scans" aria-label="Recent local searches">
+      <h2>Recent</h2>
+      <div>
+        {scans.map((scan) => (
+          <button
+            key={scan.id}
+            onClick={() => onLoad(scan)}
+            aria-label={`Open saved search ${scan.query}`}
+          >
+            {scan.query}
           </button>
         ))}
       </div>

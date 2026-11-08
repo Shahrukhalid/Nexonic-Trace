@@ -53,7 +53,7 @@ export function detectQuery(
 export function safeSourceUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    const host = url.hostname.toLowerCase();
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
     return (
       url.protocol === "https:" &&
       !url.username &&

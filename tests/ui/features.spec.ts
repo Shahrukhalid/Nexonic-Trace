@@ -50,7 +50,8 @@ test.beforeEach(async ({ page }) => {
             ];
           return summary;
         }
-        if (command === "list_scans") return scans;
+        if (command === "list_scans" || command === "recent_scans")
+          return scans;
         if (command === "delete_scan" || command === "clear_history") {
           scans = [];
           return;

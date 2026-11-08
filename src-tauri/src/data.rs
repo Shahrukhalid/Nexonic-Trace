@@ -99,12 +99,19 @@ impl Store {
                 ],
             )
             .map_err(|_| "Cannot save local scan.")?;
+        self.db.execute("DELETE FROM scans WHERE id NOT IN (SELECT id FROM scans ORDER BY created_at DESC LIMIT 100)",[]).map_err(|_|"Cannot enforce history retention.")?;
         Ok(())
     }
     pub fn scans(&self) -> Result<Vec<SavedScan>, String> {
-        let mut statement=self.db.prepare("SELECT id,query,mode,created_at,summary FROM scans ORDER BY created_at DESC LIMIT 100").map_err(|_|"Cannot read history.")?;
+        self.scans_with_limit(100)
+    }
+    pub fn recent_scans(&self) -> Result<Vec<SavedScan>, String> {
+        self.scans_with_limit(5)
+    }
+    fn scans_with_limit(&self, limit: i64) -> Result<Vec<SavedScan>, String> {
+        let mut statement=self.db.prepare("SELECT id,query,mode,created_at,summary FROM scans ORDER BY created_at DESC LIMIT ?1").map_err(|_|"Cannot read history.")?;
         let rows = statement
-            .query_map([], |row| {
+            .query_map([limit], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
