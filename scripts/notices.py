@@ -94,13 +94,23 @@ def rust_notices(target, output):
             standard_text(value,output)
         records.append(record)
     sysroot = pathlib.Path(subprocess.check_output(['rustc','--print','sysroot'],text=True).strip())
-    for name in ['COPYRIGHT','LICENSE-APACHE','LICENSE-MIT']:
-        source=sysroot/'share/doc/rust'/name
-        if source.is_file():
-            destination=output/'rust-standard-library'/name
-            destination.parent.mkdir(parents=True,exist_ok=True)
-            shutil.copyfile(source,destination)
+    records.append(rust_standard_library_notices(sysroot, output))
     return records
+
+
+def rust_standard_library_notices(sysroot, output):
+    # Rust's compiler component supplies this generated, self-contained notice
+    # for redistributors of binaries linked with the standard library.
+    source = sysroot/'share/doc/rust/COPYRIGHT-library.html'
+    if not source.is_file():
+        raise ValueError('Rust standard-library copyright notices are missing from the toolchain')
+    destination = output/'rust-standard-library'/source.name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    return {'ecosystem':'Rust standard library', 'name':'std',
+            'version':subprocess.check_output(['rustc','--version'],text=True).strip(),
+            'license':'MIT OR Apache-2.0 (see bundled notices for components)',
+            'notices':['rust-standard-library/'+source.name]}
 
 
 def javascript_notices(output):

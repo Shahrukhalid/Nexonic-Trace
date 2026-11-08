@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parents[1]
 proof=json.loads((ROOT/'test-results/android-native.json').read_text())
-if proof.get('passed') is not True:
+if proof.get('passed') is not True or proof.get('testedAbi') not in {'x86_64','arm64-v8a','armeabi-v7a'}:
     raise SystemExit('Actual Android native acceptance proof required')
 reports=list((ROOT/'src-tauri/gen/android/app/build/outputs/androidTest-results').rglob('TEST-*.xml'))
 if not reports:
@@ -40,7 +40,7 @@ for abi,label,variant in [('arm64-v8a','ARM64','arm64'),('armeabi-v7a','ARM32','
         libraries=[n for n in archive.namelist() if n.startswith('lib/') and n.endswith('.so')]
         if not libraries or any(n.split('/')[1]!=abi for n in libraries):
             raise SystemExit('APK ABI mismatch')
-        if 'assets/notices/INDEX.json' not in archive.namelist():
+        if not {'assets/notices/INDEX.json','assets/notices/rust-standard-library/COPYRIGHT-library.html'}.issubset(archive.namelist()):
             raise SystemExit('Android dependency notices missing')
         for name in libraries:
             elf=archive.read(name)
@@ -58,5 +58,6 @@ for abi,label,variant in [('arm64-v8a','ARM64','arm64'),('armeabi-v7a','ARM32','
     name=f'NexonicTrace-Android-{label}-Development.apk'
     shutil.copyfile(apk,out/name)
     records.append({'name':name,'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'bytes':apk.stat().st_size,'signature':'Android development certificate verified','alignment':'16 KiB ELF and APK verified'})
-(out/'VALIDATION-Android.json').write_text(json.dumps({'level':'development test build','productionSigned':False,'nativeAcceptance':'device installation, launch, real IPC, navigation, history and deletion passed before collection','assets':records},indent=2)+'\n')
+commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+(out/'VALIDATION-Android.json').write_text(json.dumps({'sourceCommit':commit,'testedAbi':proof['testedAbi'],'level':'development test build','productionSigned':False,'nativeAcceptance':'installation, launch, real IPC, navigation, history, cancellation and deletion passed on testedAbi; published ARM APK signatures, architecture, contents and alignment verified','assets':records},indent=2)+'\n')
 print('Android signatures, contents, architecture and 16 KiB alignment passed.')

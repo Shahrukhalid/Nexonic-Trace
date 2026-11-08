@@ -37,7 +37,7 @@ jobs:
           node-version: '24'
           cache: npm
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
@@ -47,6 +47,7 @@ jobs:
       - run: npm run test:ui
       - run: npm audit --audit-level=high
       - run: cargo install cargo-audit --version 0.22.2 --locked
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: python3 scripts/security_audit.py
       - run: python3 scripts/notices.py --target aarch64-apple-darwin
       - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
@@ -71,6 +72,7 @@ jobs:
             target: x86_64-apple-darwin
             bundles: app,dmg
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -83,7 +85,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: npm ci
       - run: cargo fmt --all --check
       - run: cargo test --workspace --locked
@@ -95,20 +97,10 @@ jobs:
         with:
           path: ~\AppData\Local\tauri
           key: tauri-bundler-tools-${{ runner.os }}-v1
-      - name: Build and bundle (retries transient download and disk-image errors)
-        shell: bash
+      - name: Build packages with scoped transient retries
+        run: python scripts/bundle.py --bundles ${{ matrix.bundles }}
         env:
           APPLE_SIGNING_IDENTITY: '-'
-        run: |
-          for attempt in 1 2 3; do
-            npm run tauri -- build --debug --bundles ${{ matrix.bundles }} --ci && exit 0
-            echo "::warning::Bundling attempt $attempt failed; retrying"
-            if [ "$RUNNER_OS" = macOS ]; then
-              hdiutil info | awk '/\/dev\/disk/ {print $1}' | xargs -n1 hdiutil detach -force >/dev/null 2>&1 || true
-            fi
-            sleep 20
-          done
-          exit 1
       - run: python scripts/package_desktop.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -141,7 +133,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: npm ci
       - name: Install Android build tools
         run: |
@@ -185,6 +177,9 @@ jobs:
           target: google_apis
           avd-name: NexonicTraceTest
           disable-animations: true
+          cores: 2
+          ram-size: 2048M
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -feature -Vulkan
           emulator-boot-timeout: 600
           script: |
             adb install -r src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk
@@ -192,6 +187,16 @@ jobs:
             adb shell am start -W -n com.nexonic.trace/.MainActivity
             timeout 600 node tests/native/android-smoke.mjs
             cd src-tauri/gen/android && timeout 900 ./gradlew :app:connectedX86_64DebugAndroidTest -x :app:rustBuildX86_64Debug
+      - name: Capture Android failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-failure-evidence
+          path: |
+            test-results/android-failure.png
+            src-tauri/gen/android/app/build/outputs/androidTest-results/**/*.xml
+          if-no-files-found: ignore
+          retention-days: 7
       - run: python3 scripts/package_android.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

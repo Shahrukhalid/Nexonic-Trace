@@ -17,7 +17,7 @@ args=parser.parse_args()
 out=ROOT/args.out
 out.mkdir(parents=True,exist_ok=True)
 notices=ROOT/'src-tauri/notices'
-if not (notices/'INDEX.json').is_file():
+if not (notices/'INDEX.json').is_file() or not (notices/'rust-standard-library/COPYRIGHT-library.html').is_file():
     raise SystemExit('Dependency notices must be collected before packaging')
 build=ROOT/'target/debug'
 smoke=ROOT/'scripts/native_smoke.py'
@@ -33,6 +33,8 @@ if platform.system()=='Windows':
     with tempfile.TemporaryDirectory(prefix='nexonic-install-') as temporary:
         installed=Path(temporary)/'Application'
         run(setup[0],'/S',f'/D={installed}')
+        if not (installed/'notices/rust-standard-library/COPYRIGHT-library.html').is_file():
+            raise SystemExit('Installed application is missing standard-library notices')
         run('python',smoke,installed/'nexonic-trace.exe')
         uninstaller=installed/'uninstall.exe'
         if uninstaller.exists():
@@ -52,7 +54,7 @@ if platform.system()=='Windows':
 else:
     label='macOS-'+('AppleSilicon' if platform.machine()=='arm64' else 'Intel')
     app=build/'bundle/macos/Nexonic Trace.app'
-    if not (app/'Contents/Resources/notices/INDEX.json').exists():
+    if not (app/'Contents/Resources/notices/INDEX.json').exists() or not (app/'Contents/Resources/notices/rust-standard-library/COPYRIGHT-library.html').is_file():
         raise SystemExit('Application bundle is missing its dependency notices')
     run('codesign','--verify','--deep','--strict',app)
     run('python3',smoke,app/'Contents/MacOS/nexonic-trace')
@@ -62,9 +64,11 @@ else:
         raise SystemExit('Exactly one disk image required')
     run('hdiutil','verify',images[0])
     shutil.copyfile(images[0],out/f'NexonicTrace-{label}-Development.dmg')
-record={'platform':label,'level':'development test build','productionSigned':False,'nativeAcceptance':'passed: launch, real IPC, restart persistence, navigation, deletion', 'assets':[]}
-for item in sorted(out.iterdir()):
-    if item.is_file() and item.suffix in {'.exe','.zip','.dmg'}:
-        record['assets'].append({'name':item.name,'sha256':hashlib.sha256(item.read_bytes()).hexdigest(),'bytes':item.stat().st_size})
+commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+record={'sourceCommit':commit,'platform':label,'level':'development test build','productionSigned':False,'nativeAcceptance':'passed: launch, real IPC, restart persistence, navigation, deletion', 'assets':[]}
+names = ['NexonicTrace-Windows-x64-Development-Setup.exe', 'NexonicTrace-Windows-x64-Development-Portable.zip'] if label == 'Windows-x64' else [f'NexonicTrace-{label}-Development.zip', f'NexonicTrace-{label}-Development.dmg']
+for name in names:
+    item=out/name
+    record['assets'].append({'name':item.name,'sha256':hashlib.sha256(item.read_bytes()).hexdigest(),'bytes':item.stat().st_size})
 (out/f'VALIDATION-{label}.json').write_text(json.dumps(record,indent=2)+'\n')
 print('Desktop package contents and native acceptance passed.')
