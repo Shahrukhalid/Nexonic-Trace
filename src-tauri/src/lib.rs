@@ -1,5 +1,8 @@
+mod data;
+mod features;
 use std::time::{Duration, Instant};
 use tauri::ipc::Channel;
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
@@ -16,6 +19,7 @@ struct SearchState {
 #[tauri::command]
 async fn start_search(
     state: tauri::State<'_, SearchState>,
+    features: tauri::State<'_, features::Features>,
     job_id: String,
     query: String,
     mode: String,
@@ -41,7 +45,7 @@ async fn start_search(
         *last = Some(Instant::now());
         *active = Some((job_id.clone(), token.clone()));
     }
-    let result = state
+    let mut result = state
         .engine
         .discover(
             job_id.clone(),
@@ -54,6 +58,11 @@ async fn start_search(
             },
         )
         .await;
+    if let Ok(summary) = &mut result {
+        if let Err(error) = features.store.lock().await.record(&query, &mode, summary) {
+            summary.warnings.push(error);
+        }
+    }
     let mut active = state.active.lock().await;
     if active.as_ref().is_some_and(|(id, _)| id == &job_id) {
         *active = None;
@@ -73,7 +82,11 @@ async fn cancel_search(state: tauri::State<'_, SearchState>, job_id: String) -> 
 
 #[tauri::command]
 fn open_source(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    let parsed = reqwest_url(&url)?;
+    let parsed = if trace_core::security::public_source_url(&url) {
+        url
+    } else {
+        reqwest_url(&url)?
+    };
     app.opener()
         .open_url(parsed, None::<&str>)
         .map_err(|_| "Could not open the source in your browser.".into())
@@ -133,12 +146,32 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            let (directory, _) =
+                data::data_directory(app.path().app_data_dir()?).map_err(std::io::Error::other)?;
+            let store =
+                data::Store::open(&directory.join("trace.db")).map_err(std::io::Error::other)?;
+            app.manage(features::Features::new(store));
+            Ok(())
+        })
         .manage(SearchState::default())
         .invoke_handler(tauri::generate_handler![
             start_search,
             cancel_search,
             open_source,
-            save_report
+            save_report,
+            features::get_preferences,
+            features::set_preferences,
+            features::list_scans,
+            features::delete_scan,
+            features::clear_history,
+            features::delete_all_data,
+            features::configure_provider,
+            features::provider_status,
+            features::password_check,
+            features::public_web_search,
+            features::breach_check
         ])
         .run(tauri::generate_context!())
         .expect("Could not start Nexonic Trace");
