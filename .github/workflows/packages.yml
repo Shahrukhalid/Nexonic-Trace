@@ -142,7 +142,7 @@ jobs:
         run: |
           cd src-tauri/gen/android
           ./gradlew --no-configuration-cache :app:collectRuntimeNotices
-          cd ../../../..
+          cd ../../..
           python3 scripts/notices.py --target aarch64-linux-android --maven-manifest src-tauri/gen/android/app/build/runtime-dependencies.tsv
           mkdir -p src-tauri/gen/android/app/src/main/assets/notices
           cp -R src-tauri/notices/. src-tauri/gen/android/app/src/main/assets/notices/
