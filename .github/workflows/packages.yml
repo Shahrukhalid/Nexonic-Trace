@@ -128,7 +128,11 @@ jobs:
       - run: npm ci
       - name: Install Android build tools
         run: |
-          sdkmanager "ndk;$NDK_VERSION" 'platforms;android-37' 'build-tools;37.0.0'
+          yes | sdkmanager --licenses > /dev/null || true
+          if ! sdkmanager --install "ndk;$NDK_VERSION" 'platforms;android-37'; then
+            sdkmanager --list 2>/dev/null | grep -E 'ndk;27|platforms;android-3[5-9]|build-tools;3[5-9]' | sed 's/^/::warning::available /' | head -30
+            exit 1
+          fi
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - name: Initialize local plugin paths
         run: npm run tauri -- android init --ci --skip-targets-install
