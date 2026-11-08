@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      NDK_VERSION: 27.2.12479018
+      NDK_VERSION: 27.3.13750724
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: gradle/actions/wrapper-validation@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
@@ -129,7 +129,7 @@ jobs:
       - name: Install Android build tools
         run: |
           yes | sdkmanager --licenses > /dev/null || true
-          if ! sdkmanager --install "ndk;$NDK_VERSION" 'platforms;android-37'; then
+          if ! sdkmanager --install "ndk;$NDK_VERSION" 'platforms;android-36'; then
             sdkmanager --list 2>/dev/null | grep -E 'ndk;27|platforms;android-3[5-9]|build-tools;3[5-9]' | sed 's/^/::warning::available /' | head -30
             exit 1
           fi
