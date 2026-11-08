@@ -10,6 +10,7 @@ use trace_core::{SearchSummary, SearchUpdate};
 struct SearchState {
     active: Mutex<Option<(String, CancellationToken)>>,
     last_start: Mutex<Option<Instant>>,
+    engine: trace_core::Engine,
 }
 
 #[tauri::command]
@@ -40,10 +41,19 @@ async fn start_search(
         *last = Some(Instant::now());
         *active = Some((job_id.clone(), token.clone()));
     }
-    let result = trace_core::discover(job_id.clone(), &query, timeout_seconds, token, |update| {
-        let _ = on_update.send(update);
-    })
-    .await;
+    let result = state
+        .engine
+        .discover(
+            job_id.clone(),
+            &query,
+            &mode,
+            timeout_seconds,
+            token,
+            |update| {
+                let _ = on_update.send(update);
+            },
+        )
+        .await;
     let mut active = state.active.lock().await;
     if active.as_ref().is_some_and(|(id, _)| id == &job_id) {
         *active = None;
@@ -71,7 +81,13 @@ fn open_source(app: tauri::AppHandle, url: String) -> Result<(), String> {
 
 fn reqwest_url(url: &str) -> Result<String, String> {
     // Only generated profile URLs with a supported username can leave the app.
-    for prefix in ["https://github.com/", "https://dev.to/"] {
+    for prefix in [
+        "https://github.com/",
+        "https://dev.to/",
+        "https://codeberg.org/",
+        "https://lichess.org/@/",
+        "https://www.chess.com/member/",
+    ] {
         if let Some(username) = url.strip_prefix(prefix) {
             if trace_core::valid_query(username) {
                 return Ok(url.into());

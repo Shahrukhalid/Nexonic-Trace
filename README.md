@@ -11,13 +11,13 @@ Nexonic Trace is a local-first public-profile discovery application for Windows,
 ## Available in this build
 
 - React/TypeScript interface inside a Tauri 2 native shell, with desktop and mobile layouts, keyboard navigation, and light/dark themes.
-- Shared Rust engine with two initial public-API connectors: GitHub and DEV Community.
-- Concurrent, time-bounded requests; progressive results; cancellation; fixed HTTPS destinations; refused redirects; bounded response bodies; no automatic retries or access bypasses.
+- Shared Rust engine with five public-API connectors: GitHub, DEV Community, Codeberg, Lichess, and Chess.com.
+- Concurrent, time-bounded requests; progressive results; cancellation; fixed HTTPS destinations; refused redirects; bounded response bodies; one controlled transient-failure retry, and no access bypasses.
 - Verification using matching usernames, numeric IDs, and provider-specific profile data. HTTP 200 alone does not confirm a profile. Account existence never establishes identity ownership.
 - Result filters, evidence details, source links, and redacted JSON/CSV session reports.
 - Session-only results and deletion controls. Only appearance is persisted. No credentials or search history are saved.
 
-All three search modes currently check the same two sources. Connector coverage is preliminary, with deterministic regression tests and limited live smoke checks; this is not broad accuracy certification.
+Quick checks 2 sources, Deep checks 4, and Comprehensive checks all 5. Versioned connector definitions record permitted endpoints, username syntax, verification signals, pacing, and validation dates. Each connector passed limited positive and missing-account live smoke checks on 2026-11-08; this is not broad accuracy certification.
 
 Email discovery, breach intelligence, password exposure, personal-information association, SQLite history, PDF/HTML reports, automatic rule updates, and release packages are not implemented yet. Their interface sections explain availability and do not generate findings. Browser preview never performs discovery; search execution requires the native app.
 
