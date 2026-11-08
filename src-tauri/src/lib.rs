@@ -2,7 +2,7 @@ mod data;
 mod features;
 use std::time::{Duration, Instant};
 use tauri::ipc::Channel;
-use tauri::Manager;
+use tauri::{Listener, Manager};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -143,6 +143,32 @@ pub fn run() {
         .setup(|app| {
             let (directory, portable) =
                 data::data_directory(app.path().app_data_dir()?).map_err(std::io::Error::other)?;
+            let verification_root =
+                std::env::var_os("NEXONIC_RELEASE_SMOKE_DATA").map(std::path::PathBuf::from);
+            let directory = if let Some(root) = &verification_root {
+                if std::env::var("CI").as_deref() != Ok("true") {
+                    return Err(std::io::Error::other(
+                        "Release verification is restricted to explicit CI mode.",
+                    )
+                    .into());
+                }
+                data::verification_directory(root, directory, portable)
+                    .map_err(std::io::Error::other)?
+            } else {
+                directory
+            };
+            if let Some(root) = verification_root {
+                let handle = app.handle().clone();
+                app.listen("nexonic-startup-ready", move |_| {
+                    // Fixed output in the validated scratch directory. No new
+                    // privileged IPC command or WebView remote debugging.
+                    let result = std::fs::write(
+                        root.join("result.json"),
+                        b"{\"passed\":true,\"rendered\":true,\"nativePreferences\":true}\n",
+                    );
+                    handle.exit(if result.is_ok() { 0 } else { 1 });
+                });
+            }
             #[cfg(debug_assertions)]
             let directory =
                 if !portable && std::env::var("NEXONIC_SMOKE_TEST").as_deref() == Ok("1") {

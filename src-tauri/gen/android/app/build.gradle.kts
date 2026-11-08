@@ -18,6 +18,7 @@ val tauriProperties = Properties().apply {
 android {
     compileSdk = 36
     namespace = "com.nexonic.trace"
+    testBuildType = if (System.getenv("NEXONIC_TEST_RELEASE") == "1") "release" else "debug"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.nexonic.trace"
@@ -31,6 +32,7 @@ android {
         if (System.getenv("NEXONIC_ANDROID_KEYSTORE") != null) {
             create("production") {
                 storeFile = file(System.getenv("NEXONIC_ANDROID_KEYSTORE"))
+                storeType = "PKCS12"
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
                 keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
@@ -101,7 +103,8 @@ apply(from = file("tauri.build.gradle.kts"))
 tasks.register("collectRuntimeNotices") {
     notCompatibleWithConfigurationCache("License inventory resolves runtime artifacts at execution")
     doLast {
-        val artifacts = configurations.first { it.name.endsWith("DebugRuntimeClasspath") && it.isCanBeResolved }.incoming.artifactView {
+        val buildType = if (System.getenv("NEXONIC_TEST_RELEASE") == "1") "Release" else "Debug"
+        val artifacts = configurations.first { it.name.endsWith("${buildType}RuntimeClasspath") && it.isCanBeResolved }.incoming.artifactView {
             componentFilter { it is ModuleComponentIdentifier }
         }.artifacts.artifacts
         val destination = layout.buildDirectory.file("runtime-dependencies.tsv").get().asFile

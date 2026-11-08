@@ -1,0 +1,7 @@
+{
+  "alias": "nexonic-trace-release",
+  "sha256": "2008a686ddef1171a4d76d5c1bf1b26ba5e5daa1dc931a5e9b9ad4b8943f9d75",
+  "certificate": "android-signing-certificate.pem",
+  "keyType": "RSA-3072",
+  "purpose": "Android APK release signing; self-signed app identity"
+}

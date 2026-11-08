@@ -30,6 +30,8 @@ class WorkspaceTest {
                 device.displayWidth / 2, device.displayHeight / 3, 30)
         }
         assertTrue("History deletion must be reachable by touch", device.wait(Until.hasObject(By.text("Delete all data")), 10000))
+        device.findObject(By.text("Delete all data")).click()
+        assertTrue("Native data deletion must complete", device.wait(Until.hasObject(By.textContains("have been cleared")), 15000))
         device.findObject(By.text("Security")).click()
         assertTrue("Explicit password check must be available", device.wait(Until.hasObject(By.text("Check password")), 10000))
     }

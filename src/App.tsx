@@ -23,6 +23,7 @@ import {
 } from "./bridge";
 import { detectQuery, safeSourceUrl, statusLabels } from "./models";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import {
   SecurityPanel,
   HistoryPanel,
@@ -147,6 +148,17 @@ export default function App() {
       if (prefsRead.current === controller) prefsRead.current = null;
     };
   }, [prefsAttempt]);
+  useEffect(() => {
+    if (
+      isNative() &&
+      prefsReady &&
+      document.querySelector("h1")?.textContent ===
+        "Discover your digital footprint."
+    ) {
+      // Local readiness signal; no network, query, password or key data.
+      void emit("nexonic-startup-ready").catch(() => {});
+    }
+  }, [prefsReady]);
   useEffect(() => {
     if (isNative() && prefsReady)
       void invoke("set_preferences", {
