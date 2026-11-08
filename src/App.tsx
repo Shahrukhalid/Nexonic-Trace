@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Activity, ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleHelp, Clock3, Code2, Compass, Database, FileText, Fingerprint, Globe2, History, Layers3, LayoutDashboard, LockKeyhole, Menu, Moon, Search, Settings2, Shield, ShieldCheck, SlidersHorizontal, Sparkles, Sun, X, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { cancelSearch, isNative, openSource, search } from './bridge';
+import { cancelSearch, isNative, openSource, saveReport, search } from './bridge';
 import { csvReport, detectQuery, safeSourceUrl, statusLabels } from './models';
 import type { Finding, SearchMode } from './models';
 
@@ -106,9 +106,14 @@ export default function App() {
     setCanceling(true);
     try { await cancelSearch(activeJob.current); } catch { setNotice('Cancellation could not be delivered. Requests will still time out.'); setCanceling(false); }
   }
-  function exportReport(format: 'json' | 'csv') {
+  async function exportReport(format: 'json' | 'csv') {
     if (!findings.length) return;
     const output = format === 'csv' ? csvReport(findings, redact) : JSON.stringify({ application: 'Nexonic Trace', version: '0.1.0', generatedAt: new Date().toISOString(), query: redact ? '[redacted]' : activeQuery, canceled, ownership: 'Account existence does not establish identity ownership.', findings: findings.map(f => redact ? { ...f, url: '[redacted]', evidence: ['[redacted]'] } : f) }, null, 2);
+    if (isNative()) {
+      try { const saved = await saveReport(format, output); if (saved) setNotice('Report saved to your chosen location.'); }
+      catch (error) { setNotice(typeof error === 'string' ? error : 'The report could not be saved.'); }
+      return;
+    }
     const url = URL.createObjectURL(new Blob([output], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' }));
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = `NexonicTrace-Report.${format}`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

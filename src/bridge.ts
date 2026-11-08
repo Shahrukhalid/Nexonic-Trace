@@ -14,3 +14,6 @@ export async function cancelSearch(jobId: string): Promise<void> {
 export async function openSource(url: string): Promise<void> {
   await invoke('open_source', { url });
 }
+export async function saveReport(format: 'json' | 'csv', content: string): Promise<boolean> {
+  return invoke<boolean>('save_report', { format, content });
+}

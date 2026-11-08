@@ -11,3 +11,5 @@ Next: extend versioned connector definitions with source-specific syntax, positi
 Architecture review completed once. Independently implemented code; no external source/rule database incorporated. Use bounded async work, explicit cancellation, source-specific positive and negative signals, minimal evidence metadata, and narrow native capabilities. Avoid whole-page retention and arbitrary URL fetching. Re-run research only when a concrete compatibility or provider question requires it.
 
 Limited live validation: GitHub and DEV Community both confirmed `octocat` and `ben`; both returned not found for `nexonic-missing-8f9e1c472a`. This is a smoke check, not broad connector accuracy certification. Initial hosted macOS jobs used a retired runner; migrated to supported macOS 15.
+
+Desktop report exports use a native Save dialog through a narrow command, with user-selected destinations and bounded content. Native Save dialog interaction still needs manual validation on an unlocked desktop. Browser download APIs are not used for native exports.
