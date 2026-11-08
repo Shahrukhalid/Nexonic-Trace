@@ -91,44 +91,49 @@ pub struct SearchUpdate {
     pub total: usize,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Site {
-    GitHub,
-    DevCommunity,
-    Codeberg,
-    Lichess,
-    Chess,
+pub use registry::Rule;
+
+fn profile_url(rule: &Rule, username: &str) -> String {
+    rule.profile_url.replace("{username}", username)
+}
+fn endpoint(rule: &Rule, username: &str) -> String {
+    rule.api_url.replace("{username}", username)
+}
+fn valid_username(rule: &Rule, username: &str) -> bool {
+    valid_query(username)
+        && regex::Regex::new(&rule.username_pattern).is_ok_and(|r| r.is_match(username))
+        && (rule.id != "github" || !username.contains("--"))
+}
+/// MediaWiki stores names with a capitalised first letter and spaces for underscores.
+fn mediawiki_name(username: &str) -> String {
+    let spaced = username.replace('_', " ");
+    let mut chars = spaced.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().collect::<String>() + chars.as_str())
+        .unwrap_or_default()
+}
+fn username_matches(rule: &Rule, value: &str, username: &str) -> bool {
+    let wanted = format!("{username}{}", rule.verify.username_suffix);
+    match rule.verify.username_match.as_str() {
+        "exact" => value == wanted,
+        "mediawiki" => value == mediawiki_name(&wanted),
+        _ => value.eq_ignore_ascii_case(&wanted),
+    }
 }
 
-impl Site {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::GitHub => "GitHub",
-            Self::DevCommunity => "DEV Community",
-            Self::Codeberg => "Codeberg",
-            Self::Lichess => "Lichess",
-            Self::Chess => "Chess.com",
-        }
-    }
-
-    fn rule(self) -> registry::Rule {
-        registry::registry()
-            .sites
-            .into_iter()
-            .find(|r| r.name == self.name())
-            .expect("built-in connector rule")
-    }
-    fn profile_url(self, username: &str) -> String {
-        self.rule().profile_url.replace("{username}", username)
-    }
-    fn endpoint(self, username: &str) -> String {
-        self.rule().api_url.replace("{username}", username)
-    }
-    fn valid_username(self, username: &str) -> bool {
-        valid_query(username)
-            && regex::Regex::new(&self.rule().username_pattern).is_ok_and(|r| r.is_match(username))
-            && (!matches!(self, Self::GitHub) || !username.contains("--"))
-    }
+/// True only for a profile URL this app itself generates: a bundled rule's
+/// template filled with a username that rule accepts.
+pub fn is_profile_url(url: &str) -> bool {
+    registry::registry().sites.iter().any(|rule| {
+        let (prefix, suffix) = rule
+            .profile_url
+            .split_once("{username}")
+            .expect("validated template");
+        url.strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix(suffix))
+            .is_some_and(|username| valid_username(rule, username))
+    })
 }
 
 pub fn valid_query(query: &str) -> bool {
@@ -154,12 +159,13 @@ pub fn http_client(timeout: u64) -> Result<Client, reqwest::Error> {
 
 /// Pure verification makes negative and ambiguous response regression tests deterministic.
 pub fn classify(
-    site: Site,
+    rule: &Rule,
     username: &str,
     status: u16,
     content_type: &str,
     body: &str,
 ) -> (ResultStatus, Vec<String>) {
+    use registry::lookup;
     let explain = |status, message: &str| (status, vec![message.to_string()]);
     if matches!(status, 401 | 403 | 429) {
         return explain(ResultStatus::Blocked, "The provider denied access or rate limited the request. No bypass or retry was attempted.");
@@ -168,12 +174,11 @@ pub fn classify(
         return explain(ResultStatus::Inconclusive, "The source redirected. Redirects are not followed; a redirect is not proof of account existence.");
     }
     // An HTML challenge can return HTTP 200 or 404. Only parse supported JSON responses.
-    if !content_type
-        .to_ascii_lowercase()
-        .contains("application/json")
-        && !content_type
-            .to_ascii_lowercase()
-            .contains("application/ld+json")
+    let ct = content_type.to_ascii_lowercase();
+    // Some providers label strict JSON as text/javascript; it is still parsed as JSON only.
+    if !ct.contains("application/json")
+        && !ct.contains("application/ld+json")
+        && !ct.contains("text/javascript")
     {
         return explain(
             ResultStatus::Inconclusive,
@@ -186,33 +191,30 @@ pub fn classify(
             "The API response could not be parsed. No existence assertion was made.",
         );
     };
-    if status == 404 {
-        let missing = match site {
-            Site::GitHub => data["message"].as_str() == Some("Not Found"),
-            Site::Codeberg => data["message"].as_str().is_some_and(|v| {
-                v.to_lowercase().contains("user") && v.to_lowercase().contains("not exist")
-            }),
-            Site::Lichess => data["error"]
-                .as_str()
-                .is_some_and(|v| v.eq_ignore_ascii_case("not found")),
-            Site::Chess => data["message"]
-                .as_str()
-                .is_some_and(|v| v.to_lowercase().contains("not found")),
-            Site::DevCommunity => {
-                data["status"].as_u64() == Some(404)
-                    && data["error"]
-                        .as_str()
-                        .is_some_and(|e| e.to_lowercase().contains("not found"))
-            }
+    let v = &rule.verify;
+    let nf = &v.not_found;
+    if status == nf.status {
+        let missing = match nf.kind.as_str() {
+            "null" => data.is_null(),
+            "emptyArray" => data.as_array().is_some_and(|a| a.is_empty()),
+            "present" => nf.field.as_deref().and_then(|f| lookup(&data, f)).is_some(),
+            _ => nf
+                .field
+                .as_deref()
+                .and_then(|f| lookup(&data, f))
+                .and_then(Value::as_str)
+                .zip(nf.contains.as_deref())
+                .is_some_and(|(text, needle)| text.to_lowercase().contains(&needle.to_lowercase())),
         };
-        return if missing {
-            explain(
+        if missing {
+            return explain(
                 ResultStatus::NotFound,
-                "The official API returned HTTP 404 with its expected missing-profile indicator.",
-            )
-        } else {
-            explain(ResultStatus::Inconclusive, "HTTP 404 without the expected missing-profile indicator. The account status is uncertain.")
-        };
+                "The official API returned its documented missing-profile response.",
+            );
+        }
+        if status != 200 {
+            return explain(ResultStatus::Inconclusive, "The error response lacked the expected missing-profile indicator. The account status is uncertain.");
+        }
     }
     if status != 200 {
         return explain(
@@ -220,39 +222,33 @@ pub fn classify(
             "The API returned an unexpected status. No account-existence assertion was made.",
         );
     }
-    let login_key = match site {
-        Site::GitHub | Site::Codeberg => "login",
-        Site::DevCommunity | Site::Lichess | Site::Chess => "username",
+    let matching_name = lookup(&data, &v.username_field)
+        .and_then(Value::as_str)
+        .is_some_and(|s| username_matches(rule, s, username));
+    let id = lookup(&data, &v.id_field);
+    let has_id = match v.id_kind.as_str() {
+        "positiveNumber" => id.and_then(Value::as_f64).is_some_and(|n| n > 0.0),
+        "numericString" => id
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit())),
+        _ => id
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.trim().is_empty()),
     };
-    let matching_name = data[login_key]
-        .as_str()
-        .is_some_and(|s| s.eq_ignore_ascii_case(username));
-    let numeric_id = match site {
-        Site::Chess => data["player_id"].as_u64().is_some_and(|id| id > 0),
-        Site::Lichess => {
-            data["id"]
-                .as_str()
-                .is_some_and(|id| id.eq_ignore_ascii_case(username))
-                && data["createdAt"].as_u64().is_some_and(|id| id > 0)
-        }
-        _ => data["id"].as_u64().is_some_and(|id| id > 0),
-    };
-    let profile_signal = match site {
-        Site::GitHub => {
-            data["html_url"]
-                .as_str()
-                .is_some_and(|u| u.eq_ignore_ascii_case(&site.profile_url(username)))
-                && matches!(data["type"].as_str(), Some("User" | "Organization"))
-        }
-        Site::DevCommunity => data["type_of"].as_str() == Some("user"),
-        Site::Codeberg => data["html_url"]
-            .as_str()
-            .is_some_and(|u| u.eq_ignore_ascii_case(&site.profile_url(username))),
-        Site::Lichess | Site::Chess => data["url"]
-            .as_str()
-            .is_some_and(|u| u.eq_ignore_ascii_case(&site.profile_url(username))),
-    };
-    if matching_name && numeric_id && profile_signal {
+    let profile_ok = v.profile_field.as_deref().is_none_or(|f| {
+        lookup(&data, f)
+            .and_then(Value::as_str)
+            .is_some_and(|u| u.eq_ignore_ascii_case(&profile_url(rule, username)))
+    });
+    let required_ok = v.required.iter().all(|r| {
+        let value = lookup(&data, &r.field).and_then(Value::as_str);
+        value.is_some_and(|value| {
+            (r.one_of.is_empty() || r.one_of.iter().any(|o| o == value))
+                && r.prefix.as_deref().is_none_or(|p| value.starts_with(p))
+                && (!r.equals_query || value.eq_ignore_ascii_case(username))
+        })
+    });
+    if matching_name && has_id && profile_ok && required_ok {
         (ResultStatus::Confirmed, vec![
             "The official public API returned HTTP 200 with a structured profile.".into(),
             "The returned username matches the query and includes a provider-specific account identifier.".into(),
@@ -263,11 +259,11 @@ pub fn classify(
     }
 }
 
-async fn check_site(client: &Client, site: Site, username: &str) -> Finding {
+async fn check_site(client: &Client, rule: &Rule, username: &str) -> Finding {
     let mut finding = Finding {
-        site: site.name().into(),
-        category: site.rule().category,
-        url: site.profile_url(username),
+        site: rule.name.clone(),
+        category: rule.category.clone(),
+        url: profile_url(rule, username),
         status: ResultStatus::Inconclusive,
         evidence: Vec::new(),
         checked_at: Utc::now().to_rfc3339(),
@@ -275,7 +271,7 @@ async fn check_site(client: &Client, site: Site, username: &str) -> Finding {
         request_outcome: "completed".into(),
         retryable: false,
     };
-    if !site.valid_username(username) {
+    if !valid_username(rule, username) {
         finding.status = ResultStatus::InvalidUsername;
         finding.request_outcome = "skipped".into();
         finding.evidence.push(
@@ -285,7 +281,7 @@ async fn check_site(client: &Client, site: Site, username: &str) -> Finding {
         return finding;
     }
     let response = client
-        .get(site.endpoint(username))
+        .get(endpoint(rule, username))
         .header("Accept", "application/json")
         .send()
         .await;
@@ -324,7 +320,7 @@ async fn check_site(client: &Client, site: Site, username: &str) -> Finding {
                 }
             }
             (finding.status, finding.evidence) = classify(
-                site,
+                rule,
                 username,
                 status,
                 &content_type,
@@ -335,17 +331,13 @@ async fn check_site(client: &Client, site: Site, username: &str) -> Finding {
             }
             if finding.status == ResultStatus::Confirmed {
                 if let Ok(data) = serde_json::from_slice::<Value>(&body) {
-                    for (key, label) in [
-                        ("name", "Public name"),
-                        ("bio", "Public description"),
-                        ("summary", "Public description"),
-                        ("website_url", "Public website"),
-                        ("blog", "Public website"),
-                        ("email", "Public email"),
-                    ] {
-                        if let Some(value) = data[key].as_str().filter(|v| !v.trim().is_empty()) {
+                    for field in &rule.public_fields {
+                        if let Some(value) = registry::lookup(&data, &field.field)
+                            .and_then(Value::as_str)
+                            .filter(|v| !v.trim().is_empty())
+                        {
                             finding.public_fields.push(PublicField {
-                                label: label.into(),
+                                label: field.label.clone(),
                                 value: value.chars().take(500).collect(),
                             });
                         }
@@ -420,16 +412,7 @@ impl Engine {
             http_client(timeout).map_err(|_| "Could not initialize the secure HTTP client.")?;
         let semaphore = tokio::sync::Semaphore::new(2);
         let mut pending = FuturesUnordered::new();
-        for site in [
-            Site::GitHub,
-            Site::DevCommunity,
-            Site::Codeberg,
-            Site::Lichess,
-            Site::Chess,
-        ]
-        .into_iter()
-        .take(total)
-        {
+        for rule in registry::ordered().into_iter().take(total) {
             let client = &client;
             let semaphore = &semaphore;
             pending.push(async move {
@@ -437,17 +420,17 @@ impl Engine {
                     .acquire()
                     .await
                     .expect("local semaphore stays open");
-                let host = reqwest::Url::parse(&site.endpoint(username))
+                let host = reqwest::Url::parse(&endpoint(rule, username))
                     .expect("bundled endpoint")
                     .host_str()
                     .unwrap()
                     .to_owned();
                 self.wait_turn(host.clone()).await;
-                let first=check_site(client,site,username).await;
+                let first=check_site(client,rule,username).await;
                 if first.retryable {
                     tokio::time::sleep(Duration::from_millis(500)).await;
                     self.wait_turn(host).await;
-                    let mut second=check_site(client,site,username).await;
+                    let mut second=check_site(client,rule,username).await;
                     second.evidence.push("One controlled retry followed a transient network or server failure; no further retries were made.".into());
                     second
                 } else { first }
@@ -489,18 +472,28 @@ pub async fn discover(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn status(site: Site, code: u16, body: &str) -> ResultStatus {
+    pub(crate) fn site(id: &str) -> &'static Rule {
+        registry::registry()
+            .sites
+            .iter()
+            .find(|r| r.id == id)
+            .expect("bundled rule")
+    }
+    fn status(site: &Rule, code: u16, body: &str) -> ResultStatus {
         classify(site, "octocat", code, "application/json", body).0
     }
     #[test]
     fn http_success_is_not_confirmation() {
-        assert_eq!(status(Site::GitHub, 200, "{}"), ResultStatus::Inconclusive);
+        assert_eq!(
+            status(site("github"), 200, "{}"),
+            ResultStatus::Inconclusive
+        );
     }
     #[test]
     fn confirms_structured_profile() {
         assert_eq!(
             status(
-                Site::GitHub,
+                site("github"),
                 200,
                 r#"{"id":1,"login":"octocat","html_url":"https://github.com/octocat","type":"User"}"#
             ),
@@ -511,7 +504,7 @@ mod tests {
     fn mismatched_username_is_inconclusive() {
         assert_eq!(
             status(
-                Site::GitHub,
+                site("github"),
                 200,
                 r#"{"id":1,"login":"other","html_url":"https://github.com/octocat","type":"User"}"#
             ),
@@ -522,7 +515,7 @@ mod tests {
     fn malicious_profile_url_is_inconclusive() {
         assert_eq!(
             status(
-                Site::GitHub,
+                site("github"),
                 200,
                 r#"{"id":1,"login":"octocat","html_url":"http://127.0.0.1/","type":"User"}"#
             ),
@@ -532,22 +525,25 @@ mod tests {
     #[test]
     fn missing_profile_requires_negative_signal() {
         assert_eq!(
-            status(Site::GitHub, 404, r#"{"message":"Not Found"}"#),
+            status(site("github"), 404, r#"{"message":"Not Found"}"#),
             ResultStatus::NotFound
         );
-        assert_eq!(status(Site::GitHub, 404, "{}"), ResultStatus::Inconclusive);
+        assert_eq!(
+            status(site("github"), 404, "{}"),
+            ResultStatus::Inconclusive
+        );
     }
     #[test]
     fn blocked_and_rate_limited() {
         for code in [401, 403, 429] {
-            assert_eq!(status(Site::GitHub, code, "{}"), ResultStatus::Blocked);
+            assert_eq!(status(site("github"), code, "{}"), ResultStatus::Blocked);
         }
     }
     #[test]
     fn html_challenge_is_not_confirmation() {
         assert_eq!(
             classify(
-                Site::GitHub,
+                site("github"),
                 "octocat",
                 200,
                 "text/html",
@@ -559,24 +555,27 @@ mod tests {
     }
     #[test]
     fn redirects_are_inconclusive() {
-        assert_eq!(status(Site::GitHub, 302, "{}"), ResultStatus::Inconclusive);
+        assert_eq!(
+            status(site("github"), 302, "{}"),
+            ResultStatus::Inconclusive
+        );
     }
     #[test]
     fn malformed_json_is_inconclusive() {
-        assert_eq!(status(Site::GitHub, 200, "{"), ResultStatus::Inconclusive);
+        assert_eq!(status(site("github"), 200, "{"), ResultStatus::Inconclusive);
     }
     #[test]
     fn dev_profile_requires_type_and_id() {
         assert_eq!(
             status(
-                Site::DevCommunity,
+                site("dev"),
                 200,
                 r#"{"username":"octocat","id":12,"type_of":"user"}"#
             ),
             ResultStatus::Confirmed
         );
         assert_eq!(
-            status(Site::DevCommunity, 200, r#"{"username":"octocat"}"#),
+            status(site("dev"), 200, r#"{"username":"octocat"}"#),
             ResultStatus::Inconclusive
         );
     }
@@ -611,20 +610,21 @@ mod tests {
 
 #[cfg(test)]
 mod connector_tests {
+    use super::tests::site;
     use super::*;
     #[test]
     fn new_connectors_require_multiple_signals() {
         for (site, body) in [
             (
-                Site::Codeberg,
+                site("codeberg"),
                 r#"{"id":22,"login":"octocat","html_url":"https://codeberg.org/octocat"}"#,
             ),
             (
-                Site::Lichess,
+                site("lichess"),
                 r#"{"id":"octocat","username":"octocat","url":"https://lichess.org/@/octocat","createdAt":123456}"#,
             ),
             (
-                Site::Chess,
+                site("chess"),
                 r#"{"player_id":22,"username":"octocat","url":"https://www.chess.com/member/octocat"}"#,
             ),
         ] {
@@ -653,9 +653,12 @@ mod connector_tests {
     #[test]
     fn missing_accounts_require_expected_error_data() {
         for (site, body) in [
-            (Site::Codeberg, r#"{"message":"user does not exist"}"#),
-            (Site::Lichess, r#"{"error":"Not found"}"#),
-            (Site::Chess, r#"{"message":"Player not found"}"#),
+            (site("codeberg"), r#"{"message":"user does not exist"}"#),
+            (site("lichess"), r#"{"error":"Not found"}"#),
+            (
+                site("chess"),
+                r#"{"message":"User \"missing\" not found."}"#,
+            ),
         ] {
             assert_eq!(
                 classify(site, "missing", 404, "application/json", body).0,
@@ -678,5 +681,110 @@ mod connector_tests {
         let next = tokio::time::Instant::now();
         engine.wait_turn("b".into()).await;
         assert!(next.elapsed() >= Duration::from_millis(500));
+    }
+
+    /// Every bundled connector against abridged live responses: the real
+    /// profile confirms, the real missing response is NotFound, and the same
+    /// profile never confirms a different username.
+    #[test]
+    fn every_connector_matches_captured_live_responses() {
+        let fixtures: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/connectors.json")).unwrap();
+        let missing_query = fixtures["missingQuery"].as_str().unwrap();
+        let cases = fixtures["connectors"].as_object().unwrap();
+        assert_eq!(cases.len(), registry::registry().sites.len());
+        for rule in &registry::registry().sites {
+            let case = &cases[&rule.id];
+            let query = case["query"].as_str().unwrap();
+            let run = |name: &str, q: &str| {
+                let r = &case[name];
+                classify(
+                    rule,
+                    q,
+                    r["status"].as_u64().unwrap() as u16,
+                    r["contentType"].as_str().unwrap(),
+                    r["body"].as_str().unwrap(),
+                )
+                .0
+            };
+            assert!(
+                valid_username(rule, query),
+                "{}: fixture query must be valid",
+                rule.id
+            );
+            assert_eq!(
+                run("found", query),
+                ResultStatus::Confirmed,
+                "{} found",
+                rule.id
+            );
+            assert_eq!(
+                run("missing", missing_query),
+                ResultStatus::NotFound,
+                "{} missing",
+                rule.id
+            );
+            assert_ne!(
+                run("found", "someoneelse1"),
+                ResultStatus::Confirmed,
+                "{} other user",
+                rule.id
+            );
+            let html = classify(rule, query, 200, "text/html", "<html>challenge</html>").0;
+            assert_eq!(html, ResultStatus::Inconclusive, "{} html", rule.id);
+            assert_eq!(
+                classify(rule, query, 429, "application/json", "{}").0,
+                ResultStatus::Blocked
+            );
+        }
+    }
+    #[test]
+    fn only_generated_profile_urls_can_be_opened() {
+        assert!(is_profile_url("https://github.com/octocat"));
+        assert!(is_profile_url("https://bsky.app/profile/jay.bsky.social"));
+        assert!(is_profile_url("https://news.ycombinator.com/user?id=pg"));
+        assert!(is_profile_url("https://www.mixcloud.com/spartacus/"));
+        for bad in [
+            "https://github.com/a/b",
+            "https://github.com/../x",
+            "https://evil.example/octocat",
+            "http://github.com/octocat",
+            "https://bsky.app/profile/jay.evil.com",
+            "https://news.ycombinator.com/user?id=pg&x=1",
+        ] {
+            assert!(!is_profile_url(bad), "{bad}");
+        }
+    }
+    #[test]
+    fn mediawiki_names_are_case_sensitive_after_the_first_letter() {
+        let wiki = site("wikipedia");
+        let body = r#"{"query":{"users":[{"userid":24,"name":"Jimbo Wales"}]}}"#;
+        assert_eq!(
+            classify(wiki, "jimbo_Wales", 200, "application/json", body).0,
+            ResultStatus::Confirmed
+        );
+        assert_eq!(
+            classify(wiki, "jimbo_wales", 200, "application/json", body).0,
+            ResultStatus::Inconclusive
+        );
+    }
+    #[test]
+    fn handle_suffix_and_did_are_both_required() {
+        let bsky = site("bluesky");
+        let ok = r#"{"did":"did:plc:abc","handle":"jay.bsky.social"}"#;
+        assert_eq!(
+            classify(bsky, "jay", 200, "application/json", ok).0,
+            ResultStatus::Confirmed
+        );
+        let bad = r#"{"did":"plc:abc","handle":"jay.bsky.social"}"#;
+        assert_eq!(
+            classify(bsky, "jay", 200, "application/json", bad).0,
+            ResultStatus::Inconclusive
+        );
+        let other = r#"{"did":"did:plc:abc","handle":"jay.example.com"}"#;
+        assert_eq!(
+            classify(bsky, "jay", 200, "application/json", other).0,
+            ResultStatus::Inconclusive
+        );
     }
 }

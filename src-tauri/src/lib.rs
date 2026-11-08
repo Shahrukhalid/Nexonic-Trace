@@ -97,21 +97,12 @@ fn open_source(app: tauri::AppHandle, url: String) -> Result<(), String> {
 }
 
 fn reqwest_url(url: &str) -> Result<String, String> {
-    // Only generated profile URLs with a supported username can leave the app.
-    for prefix in [
-        "https://github.com/",
-        "https://dev.to/",
-        "https://codeberg.org/",
-        "https://lichess.org/@/",
-        "https://www.chess.com/member/",
-    ] {
-        if let Some(username) = url.strip_prefix(prefix) {
-            if trace_core::valid_query(username) {
-                return Ok(url.into());
-            }
-        }
+    // Only profile URLs generated from a bundled rule and a supported username can leave the app.
+    if trace_core::is_profile_url(url) {
+        Ok(url.into())
+    } else {
+        Err("Unsupported source URL.".into())
     }
-    Err("Unsupported source URL.".into())
 }
 
 #[cfg(debug_assertions)]

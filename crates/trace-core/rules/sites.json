@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "sites": [
     {
       "id": "github",
@@ -9,21 +9,193 @@
       "apiUrl": "https://api.github.com/users/{username}",
       "method": "GET",
       "usernamePattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$",
-      "positiveSignals": [
-        "matching login",
-        "positive numeric id",
-        "matching html_url",
-        "User or Organization type"
-      ],
-      "negativeSignals": [
-        "404 with message Not Found"
+      "verify": {
+        "usernameField": "login",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "not found"
+        },
+        "profileField": "html_url",
+        "required": [
+          {
+            "field": "type",
+            "oneOf": [
+              "User",
+              "Organization"
+            ]
+          }
+        ]
+      },
+      "publicFields": [
+        {
+          "field": "name",
+          "label": "Public name"
+        },
+        {
+          "field": "bio",
+          "label": "Public description"
+        },
+        {
+          "field": "blog",
+          "label": "Public website"
+        },
+        {
+          "field": "email",
+          "label": "Public email"
+        }
       ],
       "redirects": "refuse",
       "requestsPerSecond": 1,
       "timeoutSeconds": 12,
-      "reliability": "smoke-tested",
+      "reliability": "live-verified",
       "lastVerified": "2026-11-08",
       "priority": 1
+    },
+    {
+      "id": "gitlab",
+      "name": "GitLab",
+      "category": "Developer community",
+      "profileUrl": "https://gitlab.com/{username}",
+      "apiUrl": "https://gitlab.com/api/v4/users?username={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,38}$",
+      "verify": {
+        "usernameField": "0.username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "0.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "emptyArray"
+        },
+        "profileField": "0.web_url"
+      },
+      "publicFields": [
+        {
+          "field": "0.name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 2
+    },
+    {
+      "id": "hackernews",
+      "name": "Hacker News",
+      "category": "Discussion forum",
+      "profileUrl": "https://news.ycombinator.com/user?id={username}",
+      "apiUrl": "https://hacker-news.firebaseio.com/v0/user/{username}.json",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_-]{2,15}$",
+      "verify": {
+        "usernameField": "id",
+        "usernameMatch": "exact",
+        "idField": "created",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "null"
+        }
+      },
+      "publicFields": [
+        {
+          "field": "about",
+          "label": "Public description"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 3
+    },
+    {
+      "id": "mastodon-social",
+      "name": "Mastodon (mastodon.social)",
+      "category": "Social network",
+      "profileUrl": "https://mastodon.social/@{username}",
+      "apiUrl": "https://mastodon.social/api/v1/accounts/lookup?acct={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_]{1,30}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "numericString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "not found"
+        },
+        "profileField": "url"
+      },
+      "publicFields": [
+        {
+          "field": "display_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 4
+    },
+    {
+      "id": "bluesky",
+      "name": "Bluesky",
+      "category": "Social network",
+      "profileUrl": "https://bsky.app/profile/{username}.bsky.social",
+      "apiUrl": "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={username}.bsky.social",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,16}[A-Za-z0-9])?$",
+      "verify": {
+        "usernameField": "handle",
+        "usernameMatch": "caseInsensitive",
+        "idField": "did",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 400,
+          "kind": "message",
+          "field": "message",
+          "contains": "profile not found"
+        },
+        "usernameSuffix": ".bsky.social",
+        "required": [
+          {
+            "field": "did",
+            "prefix": "did:"
+          }
+        ]
+      },
+      "publicFields": [
+        {
+          "field": "displayName",
+          "label": "Public name"
+        },
+        {
+          "field": "description",
+          "label": "Public description"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 5
     },
     {
       "id": "dev",
@@ -33,20 +205,187 @@
       "apiUrl": "https://dev.to/api/users/by_username?url={username}",
       "method": "GET",
       "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,29}$",
-      "positiveSignals": [
-        "matching username",
-        "positive numeric id",
-        "type_of user"
-      ],
-      "negativeSignals": [
-        "404 with status 404 and not-found error"
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "not found"
+        },
+        "required": [
+          {
+            "field": "type_of",
+            "oneOf": [
+              "user"
+            ]
+          }
+        ]
+      },
+      "publicFields": [
+        {
+          "field": "name",
+          "label": "Public name"
+        },
+        {
+          "field": "summary",
+          "label": "Public description"
+        },
+        {
+          "field": "website_url",
+          "label": "Public website"
+        }
       ],
       "redirects": "refuse",
       "requestsPerSecond": 1,
       "timeoutSeconds": 12,
-      "reliability": "smoke-tested",
+      "reliability": "live-verified",
       "lastVerified": "2026-11-08",
-      "priority": 2
+      "priority": 6
+    },
+    {
+      "id": "huggingface",
+      "name": "Hugging Face",
+      "category": "Developer community",
+      "profileUrl": "https://huggingface.co/{username}",
+      "apiUrl": "https://huggingface.co/api/users/{username}/overview",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}$",
+      "verify": {
+        "usernameField": "user",
+        "usernameMatch": "caseInsensitive",
+        "idField": "_id",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "does not exist"
+        },
+        "required": [
+          {
+            "field": "type",
+            "oneOf": [
+              "user"
+            ]
+          }
+        ]
+      },
+      "publicFields": [
+        {
+          "field": "fullname",
+          "label": "Public name"
+        },
+        {
+          "field": "details",
+          "label": "Public description"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 7
+    },
+    {
+      "id": "wikipedia",
+      "name": "Wikipedia (English)",
+      "category": "Knowledge community",
+      "profileUrl": "https://en.wikipedia.org/wiki/User:{username}",
+      "apiUrl": "https://en.wikipedia.org/w/api.php?action=query&list=users&usprop=registration&format=json&ususers={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$",
+      "verify": {
+        "usernameField": "query.users.0.name",
+        "usernameMatch": "mediawiki",
+        "idField": "query.users.0.userid",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "present",
+          "field": "query.users.0.missing"
+        }
+      },
+      "publicFields": [],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 8
+    },
+    {
+      "id": "lichess",
+      "name": "Lichess",
+      "category": "Gaming",
+      "profileUrl": "https://lichess.org/@/{username}",
+      "apiUrl": "https://lichess.org/api/user/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{1,29}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "createdAt",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "not found"
+        },
+        "profileField": "url",
+        "required": [
+          {
+            "field": "id",
+            "equalsQuery": true
+          }
+        ]
+      },
+      "publicFields": [],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 9
+    },
+    {
+      "id": "chess",
+      "name": "Chess.com",
+      "category": "Gaming",
+      "profileUrl": "https://www.chess.com/member/{username}",
+      "apiUrl": "https://api.chess.com/pub/player/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{2,24}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "player_id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "not found"
+        },
+        "profileField": "url"
+      },
+      "publicFields": [
+        {
+          "field": "name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 10
     },
     {
       "id": "codeberg",
@@ -56,66 +395,684 @@
       "apiUrl": "https://codeberg.org/api/v1/users/{username}",
       "method": "GET",
       "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$",
-      "positiveSignals": [
-        "matching login",
-        "positive numeric id",
-        "matching html_url"
-      ],
-      "negativeSignals": [
-        "404 with user-not-found message"
+      "verify": {
+        "usernameField": "login",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "not exist"
+        },
+        "profileField": "html_url"
+      },
+      "publicFields": [
+        {
+          "field": "full_name",
+          "label": "Public name"
+        },
+        {
+          "field": "description",
+          "label": "Public description"
+        },
+        {
+          "field": "website",
+          "label": "Public website"
+        }
       ],
       "redirects": "refuse",
       "requestsPerSecond": 1,
       "timeoutSeconds": 12,
-      "reliability": "smoke-tested",
+      "reliability": "live-verified",
       "lastVerified": "2026-11-08",
-      "priority": 3
+      "priority": 11
     },
     {
-      "id": "lichess",
-      "name": "Lichess",
-      "category": "Gaming community",
-      "profileUrl": "https://lichess.org/@/{username}",
-      "apiUrl": "https://lichess.org/api/user/{username}",
+      "id": "lemmy-world",
+      "name": "Lemmy (lemmy.world)",
+      "category": "Discussion forum",
+      "profileUrl": "https://lemmy.world/u/{username}",
+      "apiUrl": "https://lemmy.world/api/v3/user?limit=1&username={username}",
       "method": "GET",
-      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{1,19}$",
-      "positiveSignals": [
-        "matching username and id",
-        "matching profile URL",
-        "numeric creation timestamp"
-      ],
-      "negativeSignals": [
-        "404 with Not found error"
+      "usernamePattern": "^[A-Za-z0-9_]{3,20}$",
+      "verify": {
+        "usernameField": "person_view.person.name",
+        "usernameMatch": "caseInsensitive",
+        "idField": "person_view.person.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "couldnt_find_person"
+        },
+        "profileField": "person_view.person.actor_id"
+      },
+      "publicFields": [
+        {
+          "field": "person_view.person.display_name",
+          "label": "Public name"
+        }
       ],
       "redirects": "refuse",
       "requestsPerSecond": 1,
       "timeoutSeconds": 12,
-      "reliability": "smoke-tested",
+      "reliability": "live-verified",
       "lastVerified": "2026-11-08",
-      "priority": 4
+      "priority": 12
     },
     {
-      "id": "chess",
-      "name": "Chess.com",
-      "category": "Gaming community",
-      "profileUrl": "https://www.chess.com/member/{username}",
-      "apiUrl": "https://api.chess.com/pub/player/{username}",
+      "id": "codeforces",
+      "name": "Codeforces",
+      "category": "Competitive programming",
+      "profileUrl": "https://codeforces.com/profile/{username}",
+      "apiUrl": "https://codeforces.com/api/user.info?handles={username}",
       "method": "GET",
-      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{1,24}$",
-      "positiveSignals": [
-        "matching username",
-        "positive numeric player_id",
-        "matching url"
-      ],
-      "negativeSignals": [
-        "404 with player-not-found message"
+      "usernamePattern": "^[A-Za-z0-9_.-]{3,24}$",
+      "verify": {
+        "usernameField": "result.0.handle",
+        "usernameMatch": "caseInsensitive",
+        "idField": "result.0.registrationTimeSeconds",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 400,
+          "kind": "message",
+          "field": "comment",
+          "contains": "not found"
+        },
+        "required": [
+          {
+            "field": "status",
+            "oneOf": [
+              "OK"
+            ]
+          }
+        ]
+      },
+      "publicFields": [],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 13
+    },
+    {
+      "id": "crates",
+      "name": "crates.io",
+      "category": "Package registry",
+      "profileUrl": "https://crates.io/users/{username}",
+      "apiUrl": "https://crates.io/api/v1/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$",
+      "verify": {
+        "usernameField": "user.login",
+        "usernameMatch": "caseInsensitive",
+        "idField": "user.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "errors.0.detail",
+          "contains": "not found"
+        }
+      },
+      "publicFields": [
+        {
+          "field": "user.name",
+          "label": "Public name"
+        }
       ],
       "redirects": "refuse",
       "requestsPerSecond": 1,
       "timeoutSeconds": 12,
-      "reliability": "smoke-tested",
+      "reliability": "live-verified",
       "lastVerified": "2026-11-08",
-      "priority": 5
+      "priority": 14
+    },
+    {
+      "id": "speedrun",
+      "name": "Speedrun.com",
+      "category": "Gaming",
+      "profileUrl": "https://www.speedrun.com/users/{username}",
+      "apiUrl": "https://www.speedrun.com/api/v1/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_-]{2,30}$",
+      "verify": {
+        "usernameField": "data.names.international",
+        "usernameMatch": "caseInsensitive",
+        "idField": "data.id",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "could not be found"
+        },
+        "profileField": "data.weblink"
+      },
+      "publicFields": [],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 15
+    },
+    {
+      "id": "gitea",
+      "name": "Gitea",
+      "category": "Developer community",
+      "profileUrl": "https://gitea.com/{username}",
+      "apiUrl": "https://gitea.com/api/v1/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$",
+      "verify": {
+        "usernameField": "login",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "does not exist"
+        },
+        "profileField": "html_url"
+      },
+      "publicFields": [
+        {
+          "field": "full_name",
+          "label": "Public name"
+        },
+        {
+          "field": "website",
+          "label": "Public website"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 16
+    },
+    {
+      "id": "hexpm",
+      "name": "Hex",
+      "category": "Package registry",
+      "profileUrl": "https://hex.pm/users/{username}",
+      "apiUrl": "https://hex.pm/api/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_-]{2,39}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "inserted_at",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "not found"
+        }
+      },
+      "publicFields": [
+        {
+          "field": "full_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 17
+    },
+    {
+      "id": "bitbucket",
+      "name": "Bitbucket workspace",
+      "category": "Developer community",
+      "profileUrl": "https://bitbucket.org/{username}/",
+      "apiUrl": "https://api.bitbucket.org/2.0/workspaces/{username}",
+      "method": "GET",
+      "usernamePattern": "^[a-z0-9][a-z0-9_-]{0,61}$",
+      "verify": {
+        "usernameField": "slug",
+        "usernameMatch": "caseInsensitive",
+        "idField": "uuid",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error.message",
+          "contains": "no workspace"
+        },
+        "profileField": "links.html.href",
+        "required": [
+          {
+            "field": "type",
+            "oneOf": [
+              "workspace"
+            ]
+          }
+        ]
+      },
+      "publicFields": [
+        {
+          "field": "name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 18
+    },
+    {
+      "id": "codewars",
+      "name": "Codewars",
+      "category": "Competitive programming",
+      "profileUrl": "https://www.codewars.com/users/{username}",
+      "apiUrl": "https://www.codewars.com/api/v1/users/{username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_-]{1,39}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "exact",
+        "idField": "id",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "reason",
+          "contains": "not found"
+        }
+      },
+      "publicFields": [
+        {
+          "field": "name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 19
+    },
+    {
+      "id": "mixcloud",
+      "name": "Mixcloud",
+      "category": "Music",
+      "profileUrl": "https://www.mixcloud.com/{username}/",
+      "apiUrl": "https://api.mixcloud.com/{username}/",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_-]{1,39}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "key",
+        "idKind": "nonEmptyString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error.type",
+          "contains": "resourcenotfound"
+        },
+        "profileField": "url"
+      },
+      "publicFields": [
+        {
+          "field": "name",
+          "label": "Public name"
+        },
+        {
+          "field": "biog",
+          "label": "Public description"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 20
+    },
+    {
+      "id": "wikimedia-global",
+      "name": "Wikimedia global account",
+      "category": "Knowledge community",
+      "profileUrl": "https://meta.wikimedia.org/wiki/Special:CentralAuth/{username}",
+      "apiUrl": "https://meta.wikimedia.org/w/api.php?action=query&meta=globaluserinfo&format=json&guiuser={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$",
+      "verify": {
+        "usernameField": "query.globaluserinfo.name",
+        "usernameMatch": "mediawiki",
+        "idField": "query.globaluserinfo.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "present",
+          "field": "query.globaluserinfo.missing"
+        }
+      },
+      "publicFields": [],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 21
+    },
+    {
+      "id": "fandom",
+      "name": "Fandom",
+      "category": "Knowledge community",
+      "profileUrl": "https://community.fandom.com/wiki/User:{username}",
+      "apiUrl": "https://community.fandom.com/api.php?action=query&list=users&format=json&ususers={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$",
+      "verify": {
+        "usernameField": "query.users.0.name",
+        "usernameMatch": "mediawiki",
+        "idField": "query.users.0.userid",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "present",
+          "field": "query.users.0.missing"
+        }
+      },
+      "publicFields": [],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 22
+    },
+    {
+      "id": "monkeytype",
+      "name": "Monkeytype",
+      "category": "Gaming",
+      "profileUrl": "https://monkeytype.com/profile/{username}",
+      "apiUrl": "https://api.monkeytype.com/users/{username}/profile",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_.-]{1,16}$",
+      "verify": {
+        "usernameField": "data.name",
+        "usernameMatch": "caseInsensitive",
+        "idField": "data.addedAt",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "message",
+          "contains": "user not found"
+        },
+        "required": [
+          {
+            "field": "message",
+            "oneOf": [
+              "Profile retrieved"
+            ]
+          }
+        ]
+      },
+      "publicFields": [
+        {
+          "field": "data.details.bio",
+          "label": "Public description"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 23
+    },
+    {
+      "id": "gnome-gitlab",
+      "name": "GNOME GitLab",
+      "category": "Developer community",
+      "profileUrl": "https://gitlab.gnome.org/{username}",
+      "apiUrl": "https://gitlab.gnome.org/api/v4/users?username={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,38}$",
+      "verify": {
+        "usernameField": "0.username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "0.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "emptyArray"
+        },
+        "profileField": "0.web_url"
+      },
+      "publicFields": [
+        {
+          "field": "0.name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 24
+    },
+    {
+      "id": "kde-invent",
+      "name": "KDE Invent",
+      "category": "Developer community",
+      "profileUrl": "https://invent.kde.org/{username}",
+      "apiUrl": "https://invent.kde.org/api/v4/users?username={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,38}$",
+      "verify": {
+        "usernameField": "0.username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "0.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 200,
+          "kind": "emptyArray"
+        },
+        "profileField": "0.web_url"
+      },
+      "publicFields": [
+        {
+          "field": "0.name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 25
+    },
+    {
+      "id": "fosstodon",
+      "name": "Mastodon (fosstodon.org)",
+      "category": "Social network",
+      "profileUrl": "https://fosstodon.org/@{username}",
+      "apiUrl": "https://fosstodon.org/api/v1/accounts/lookup?acct={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_]{1,30}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "numericString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "not found"
+        },
+        "profileField": "url"
+      },
+      "publicFields": [
+        {
+          "field": "display_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 26
+    },
+    {
+      "id": "infosec-exchange",
+      "name": "Mastodon (infosec.exchange)",
+      "category": "Social network",
+      "profileUrl": "https://infosec.exchange/@{username}",
+      "apiUrl": "https://infosec.exchange/api/v1/accounts/lookup?acct={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_]{1,30}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "numericString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "not found"
+        },
+        "profileField": "url"
+      },
+      "publicFields": [
+        {
+          "field": "display_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 27
+    },
+    {
+      "id": "mstdn-social",
+      "name": "Mastodon (mstdn.social)",
+      "category": "Social network",
+      "profileUrl": "https://mstdn.social/@{username}",
+      "apiUrl": "https://mstdn.social/api/v1/accounts/lookup?acct={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_]{1,30}$",
+      "verify": {
+        "usernameField": "username",
+        "usernameMatch": "caseInsensitive",
+        "idField": "id",
+        "idKind": "numericString",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "not found"
+        },
+        "profileField": "url"
+      },
+      "publicFields": [
+        {
+          "field": "display_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 28
+    },
+    {
+      "id": "lemmy-ml",
+      "name": "Lemmy (lemmy.ml)",
+      "category": "Discussion forum",
+      "profileUrl": "https://lemmy.ml/u/{username}",
+      "apiUrl": "https://lemmy.ml/api/v3/user?limit=1&username={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_]{3,20}$",
+      "verify": {
+        "usernameField": "person_view.person.name",
+        "usernameMatch": "caseInsensitive",
+        "idField": "person_view.person.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "couldnt_find_person"
+        },
+        "profileField": "person_view.person.actor_id"
+      },
+      "publicFields": [
+        {
+          "field": "person_view.person.display_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 29
+    },
+    {
+      "id": "programming-dev",
+      "name": "Lemmy (programming.dev)",
+      "category": "Discussion forum",
+      "profileUrl": "https://programming.dev/u/{username}",
+      "apiUrl": "https://programming.dev/api/v3/user?limit=1&username={username}",
+      "method": "GET",
+      "usernamePattern": "^[A-Za-z0-9_]{3,20}$",
+      "verify": {
+        "usernameField": "person_view.person.name",
+        "usernameMatch": "caseInsensitive",
+        "idField": "person_view.person.id",
+        "idKind": "positiveNumber",
+        "notFound": {
+          "status": 404,
+          "kind": "message",
+          "field": "error",
+          "contains": "couldnt_find_person"
+        },
+        "profileField": "person_view.person.actor_id"
+      },
+      "publicFields": [
+        {
+          "field": "person_view.person.display_name",
+          "label": "Public name"
+        }
+      ],
+      "redirects": "refuse",
+      "requestsPerSecond": 1,
+      "timeoutSeconds": 12,
+      "reliability": "live-verified",
+      "lastVerified": "2026-11-08",
+      "priority": 30
     }
   ]
 }

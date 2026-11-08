@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import registry from "../crates/trace-core/rules/sites.json";
 import {
   Search,
   Shield,
@@ -48,9 +49,17 @@ const pages = [
   { id: "reports", label: "Export", icon: Download },
   { id: "settings", label: "Settings", icon: Settings2 },
 ] as const;
-const sources = ["GitHub", "DEV Community", "Codeberg", "Lichess", "Chess.com"];
+// The bundled connector registry is the single source of truth for profile sources.
+const sources = [...registry.sites]
+  .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
+  .map((site) => site.name);
 const sourceCount = (mode: SearchMode) =>
-  mode === "quick" ? 2 : mode === "deep" ? 4 : 5;
+  mode === "quick"
+    ? Math.min(10, sources.length)
+    : mode === "deep"
+      ? Math.min(20, sources.length)
+      : sources.length;
+const SHOWN_SOURCES = 12;
 const errorText = (error: unknown) =>
   typeof error === "string"
     ? error
@@ -683,7 +692,7 @@ export default function App() {
               <p className="coverage-note">
                 {effectiveArea !== "profiles"
                   ? "Indexed sources only. No search covers the entire internet or private dark-web content."
-                  : "Profile checks use five direct APIs. Choose Web or Dark web for broader discovery."}
+                  : `Profile checks use ${sources.length} official public APIs. Choose Web or Dark web for broader discovery.`}
               </p>
               {!running && !completed && (
                 <div className="starting-state">
@@ -694,10 +703,17 @@ export default function App() {
                             ? "DarkOwl · licensed keys required"
                             : "Brave Search · provider key required",
                         ]
-                      : sources.slice(0, sourceCount(mode))
+                      : sources.slice(
+                          0,
+                          Math.min(SHOWN_SOURCES, sourceCount(mode)),
+                        )
                     ).map((name) => (
                       <span key={name}>{name}</span>
                     ))}
+                    {effectiveArea === "profiles" &&
+                      sourceCount(mode) > SHOWN_SOURCES && (
+                        <span>+{sourceCount(mode) - SHOWN_SOURCES} more</span>
+                      )}
                   </div>
                   <p>
                     {effectiveArea === "profiles"

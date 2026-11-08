@@ -1,8 +1,8 @@
 # Search coverage
 
-Nexonic Trace separates three user-selected search areas. Five profile APIs are a small set of directly verified connectors, not the limit of web discovery.
+Nexonic Trace separates three user-selected search areas. Profile APIs are a set of directly verified connectors, not the limit of web discovery.
 
-- **Profiles:** GitHub, DEV, Codeberg, Lichess and Chess.com. Quick/Deep/Comprehensive check 2/4/5 sources. Positive confirmation requires structured account signals; the same username does not establish common ownership.
+- **Profiles:** 30 official public APIs (see [SOURCE-RESEARCH.md](SOURCE-RESEARCH.md)). Quick/Deep/Comprehensive check 10/20/30 sources, highest priority first. Positive confirmation requires structured account signals; the same username does not establish common ownership.
 - **Web:** Brave's broader public-web index, for usernames or emails. At most 20/60/100 results across 1/3/5 pages, with all-region (`country=ALL`) results, spell correction disabled for exact identifiers, deduplication, bounded responses and one-second page pacing. Additional pages are requested only when Brave explicitly reports more results. Cancellation or a later-page failure retains partial results with a warning. An indexed mention is not a verified account. A permitted Brave Search API plan/key is required.
 - **Dark web:** licensed DarkOwl Vision Search API, for usernames or emails the user owns or is authorized to check. Exact username terms and the dedicated email filter avoid broad wildcard searches. At most 20/60/100 metadata records, with paced pagination and cancellation. The provider's collection includes Tor/I2P and darknet-adjacent sources; its index and subscription determine actual coverage. The app does not crawl hidden services itself or claim all dark-web content is searchable.
 

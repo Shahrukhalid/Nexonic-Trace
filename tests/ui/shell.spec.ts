@@ -51,7 +51,7 @@ test("layout fits viewport and search modes support keyboard interaction", async
   await page.goto("/");
   await page.getByRole("radio", { name: /Deep/ }).check();
   await expect(page.getByRole("radio", { name: /Deep/ })).toBeChecked();
-  await expect(page.getByText("4 sources", { exact: true })).toBeVisible();
+  await expect(page.getByText("20 sources", { exact: true })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
   );
