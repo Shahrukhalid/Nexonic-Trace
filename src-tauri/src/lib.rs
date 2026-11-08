@@ -211,6 +211,8 @@ pub fn run() {
             features::provider_status,
             features::password_check,
             features::public_web_search,
+            features::dark_web_search,
+            features::stealer_log_check,
             features::breach_check, $($extra),*
             ]};}
 

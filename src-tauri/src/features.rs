@@ -10,6 +10,8 @@ use zeroize::Zeroizing;
 struct Keys {
     brave: Zeroizing<String>,
     hibp: Zeroizing<String>,
+    darkowl_public: Zeroizing<String>,
+    darkowl_private: Zeroizing<String>,
 }
 pub struct Features {
     pub store: Mutex<Store>,
@@ -90,6 +92,7 @@ pub async fn configure_provider(
     provider: String,
     key: String,
     accept_costs: bool,
+    public_key: Option<String>,
 ) -> Result<(), String> {
     let key = Zeroizing::new(key);
     if !key.is_empty()
@@ -101,18 +104,41 @@ pub async fn configure_provider(
     {
         return Err("A valid key and explicit provider-cost consent are required.".into());
     }
+    let public_key = Zeroizing::new(public_key.unwrap_or_default());
+    if provider == "darkowl"
+        && !key.is_empty()
+        && (public_key.len() < 8
+            || public_key.len() > 512
+            || !public_key
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"-_=+/.".contains(&b)))
+    {
+        return Err("Enter the public and private keys supplied by DarkOwl.".into());
+    }
     let mut keys = state.keys.lock().await;
     match provider.as_str() {
         "brave" => keys.brave = key,
         "hibp" => keys.hibp = key,
+        "darkowl" => {
+            keys.darkowl_private = key;
+            keys.darkowl_public = if keys.darkowl_private.is_empty() {
+                Zeroizing::new(String::new())
+            } else {
+                public_key
+            };
+        }
         _ => return Err("Unsupported provider.".into()),
     };
     Ok(())
 }
 #[tauri::command]
-pub async fn provider_status(state: State<'_, Features>) -> Result<(bool, bool), String> {
+pub async fn provider_status(state: State<'_, Features>) -> Result<(bool, bool, bool), String> {
     let keys = state.keys.lock().await;
-    Ok((!keys.brave.is_empty(), !keys.hibp.is_empty()))
+    Ok((
+        !keys.brave.is_empty(),
+        !keys.hibp.is_empty(),
+        !keys.darkowl_private.is_empty(),
+    ))
 }
 #[tauri::command]
 pub async fn password_check(
@@ -131,46 +157,85 @@ pub async fn public_web_search(
     job_id: String,
     mode: String,
 ) -> Result<trace_core::SearchSummary, String> {
+    index_search(state, query, job_id, mode, false).await
+}
+#[tauri::command]
+pub async fn dark_web_search(
+    state: State<'_, Features>,
+    query: String,
+    job_id: String,
+    mode: String,
+    authorized: bool,
+) -> Result<trace_core::SearchSummary, String> {
+    if !authorized {
+        return Err(
+            "Confirm that this username or email is yours or you have permission to check it."
+                .into(),
+        );
+    }
+    index_search(state, query, job_id, mode, true).await
+}
+async fn index_search(
+    state: State<'_, Features>,
+    query: String,
+    job_id: String,
+    mode: String,
+    dark: bool,
+) -> Result<trace_core::SearchSummary, String> {
     if job_id.is_empty() || job_id.len() > 64 {
         return Err("Invalid search identifier.".into());
     }
     let limit = match mode.as_str() {
-        "quick" => 3,
-        "deep" => 6,
-        "comprehensive" => 10,
+        "quick" => 20,
+        "deep" => 60,
+        "comprehensive" => 100,
         _ => return Err("Unsupported search mode.".into()),
     };
-    let key = state.keys.lock().await.brave.clone();
+    let (key, public) = {
+        let keys = state.keys.lock().await;
+        if dark {
+            (keys.darkowl_private.clone(), keys.darkowl_public.clone())
+        } else {
+            (keys.brave.clone(), Zeroizing::new(String::new()))
+        }
+    };
     if key.is_empty() {
-        return Err("No provider is connected. Add a Brave Search key in Settings; provider charges may apply.".into());
+        return Err(if dark{"No licensed dark-web provider is connected. Add your DarkOwl keys in Settings; a subscription is required."}else{"No provider is connected. Add a Brave Search key in Settings; provider charges may apply."}.into());
     }
     state.rate_limit().await?;
     let token = CancellationToken::new();
     {
         let mut job = state.web_job.lock().await;
         if job.is_some() {
-            return Err("A public-web search is already running.".into());
+            return Err("An indexed search is already running.".into());
         }
         *job = Some((job_id.clone(), token.clone()));
     }
-    let result = tokio::select! {biased;_=token.cancelled()=>Ok(None),result=trace_core::security::public_search(&query,&key,limit)=>result.map(Some)};
+    let provider = if dark {
+        trace_core::indexed::IndexProvider::DarkOwl {
+            public: &public,
+            private: &key,
+        }
+    } else {
+        trace_core::indexed::IndexProvider::Brave(&key)
+    };
+    let result = trace_core::indexed::search(&query, provider, limit, &token).await;
     *state.web_job.lock().await = None;
     let result = result?;
-    let canceled = result.is_none();
-    let findings = result.unwrap_or_default();
     let mut summary = trace_core::SearchSummary {
         job_id,
-        total: findings.len(),
-        findings,
-        canceled,
-        warnings: vec![],
+        total: result.findings.len(),
+        findings: result.findings,
+        canceled: result.canceled,
+        warnings: result.warnings,
     };
+    let prefix = if dark { "dark_web" } else { "public_web" };
     if let Err(error) =
         state
             .store
             .lock()
             .await
-            .record(&query, &format!("public_web_{mode}"), &summary)
+            .record(&query, &format!("{prefix}_{mode}"), &summary)
     {
         summary.warnings.push(error);
     }
@@ -201,4 +266,28 @@ pub async fn breach_check(
     }
     state.rate_limit().await?;
     tokio::select! {biased;_=cancellation.cancelled()=>Err("Security check canceled.".into()),result=trace_core::security::email_breaches(&email,&key)=>result}
+}
+
+#[tauri::command]
+pub async fn stealer_log_check(
+    state: State<'_, Features>,
+    email: String,
+    authorized: bool,
+) -> Result<Vec<String>, String> {
+    if !authorized {
+        return Err("Confirm that you own this address or have permission to check it.".into());
+    }
+    if email
+        .to_ascii_lowercase()
+        .ends_with("@hibp-integration-tests.com")
+    {
+        return Err("Provider fixture addresses are not real exposure records.".into());
+    }
+    let cancellation = state.check_cancel.lock().await.clone();
+    let key = state.keys.lock().await.hibp.clone();
+    if key.is_empty() {
+        return Err("Connect a Have I Been Pwned Pro key with a provider-verified email domain in Settings.".into());
+    }
+    state.rate_limit().await?;
+    tokio::select! {biased;_=cancellation.cancelled()=>Err("Security check canceled.".into()),result=trace_core::security::stealer_logs(&email,&key)=>result}
 }

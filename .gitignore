@@ -35,3 +35,7 @@ src-tauri/notices/*
 src-tauri/gen/android/app/src/main/assets/notices/
 release-assets/
 __pycache__/
+
+production-assets/
+*.pfx
+*.p8

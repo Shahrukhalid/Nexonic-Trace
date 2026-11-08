@@ -16,15 +16,16 @@ export function reportData(
     canceled,
     total,
     ownership:
-      "Account existence does not establish identity ownership. Indexed web mentions have not been independently verified.",
+      "Account existence does not establish identity ownership. Indexed web and dark-web mentions have not been independently verified and do not prove credential pairs. No provider covers the entire internet or private dark-web content.",
     findings: findings.map((f) =>
       redact
         ? {
             ...f,
-            site:
-              f.category === "Public web mention"
-                ? "Public web result"
-                : f.site,
+            site: ["Public web mention", "Dark-web index mention"].includes(
+              f.category,
+            )
+              ? "Indexed result"
+              : f.site,
             url: "[redacted]",
             evidence: ["[redacted]"],
             publicFields: [],

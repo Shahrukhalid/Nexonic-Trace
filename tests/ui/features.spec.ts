@@ -50,7 +50,7 @@ test.beforeEach(async ({ page }) => {
           preferences = args.preferences as typeof preferences;
           return;
         }
-        if (command === "provider_status") return [false, false];
+        if (command === "provider_status") return [false, false, false];
         if (command === "start_search") {
           const summary = {
             jobId: args.jobId,
@@ -85,6 +85,34 @@ test.beforeEach(async ({ page }) => {
         if (command === "breach_check")
           throw "No licensed breach provider is connected.";
         if (command === "public_web_search") throw "No provider is connected.";
+        if (command === "stealer_log_check")
+          throw "Stealer logs require a Have I Been Pwned Pro plan and provider-verified control of this email domain.";
+        if (command === "dark_web_search") {
+          if (!args.authorized) throw "Permission is required.";
+          if (!fixtureCase.has("darkowl-metadata"))
+            throw "No licensed dark-web provider is connected.";
+          return {
+            jobId: args.jobId,
+            total: 1,
+            canceled: false,
+            findings: [
+              {
+                ...fixture,
+                site: "DarkOwl · abcdef1234567890",
+                url: "",
+                status: "inconclusive",
+                category: "Dark-web index mention",
+                evidence: [
+                  "Matching indexed record; no document content or passwords were requested.",
+                ],
+                publicFields: [
+                  { label: "Provider record ID", value: "abcdef1234567890" },
+                  { label: "Network", value: "Tor" },
+                ],
+              },
+            ],
+          };
+        }
         if (command === "delete_all_data") {
           scans = [];
           preferences = {
@@ -210,4 +238,105 @@ test("deletion cannot be undone by a late startup settings reply", async ({
   });
   await expect(history).toBeEnabled();
   await expect(history).not.toBeChecked();
+});
+
+test("web discovery is visible and offers broader paginated depths", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("radio", { name: "Web", exact: true }).check();
+  await page.getByRole("radio", { name: "Comprehensive", exact: true }).check();
+  await expect(
+    page.getByText("100 indexed results max", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Username or email address").fill("fixture");
+  await page.getByRole("button", { name: "Start discovery" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "No provider is connected",
+  );
+  await expect(page.locator(".finding")).toHaveCount(0);
+});
+test("dark-web search requires fresh authorization and explains missing credentials", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("radio", { name: "Dark web", exact: true }).check();
+  await page.getByLabel("Username or email address").fill("fixture");
+  const start = page.getByRole("button", { name: "Start discovery" });
+  await expect(start).toBeDisabled();
+  await page
+    .getByLabel(
+      "This username or email is mine, or I have permission to check it.",
+    )
+    .check();
+  await start.click();
+  await expect(page.getByRole("status")).toContainText(
+    "No licensed dark-web provider",
+  );
+  await page.getByLabel("Username or email address").fill("different-fixture");
+  await expect(start).toBeDisabled();
+  await expect(page.locator(".finding")).toHaveCount(0);
+});
+test("dark-web metadata stays unverified and exposes no direct leak links", async ({
+  page,
+}) => {
+  await page.goto("/?darkowl-metadata=1");
+  await page.getByRole("radio", { name: "Dark web", exact: true }).check();
+  await page.getByLabel("Username or email address").fill("fixture");
+  await page
+    .getByLabel(
+      "This username or email is mine, or I have permission to check it.",
+    )
+    .check();
+  await page.getByRole("button", { name: "Start discovery" }).click();
+  const finding = page.locator(".finding");
+  await expect(finding).toContainText("Inconclusive");
+  await expect(finding.getByRole("link")).toHaveCount(0);
+  await finding.locator("summary").click();
+  await expect(finding).toContainText("Provider record ID");
+  await expect(finding).toContainText("Tor");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await expect(page.getByRole("checkbox")).toBeChecked();
+});
+test("stealer logs explain domain verification and plan requirements", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await page.getByRole("tab", { name: "Email breaches" }).click();
+  await page.getByLabel("Exposure source").selectOption("stealers");
+  await page
+    .getByLabel("Email address", { exact: true })
+    .fill("fixture@example.org");
+  await page
+    .getByLabel("I own this address or have permission to check it.")
+    .check();
+  await page.getByRole("button", { name: "Check stealer logs" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "provider-verified control",
+  );
+  await expect(page.locator(".check-result")).toHaveCount(0);
+});
+
+test("dark-web keys are cleared from inputs after session connection", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Provider", { exact: true }).selectOption("darkowl");
+  const publicKey = page.getByLabel("Public key", { exact: true });
+  const privateKey = page.getByLabel("Private key", { exact: true });
+  await publicKey.fill("fixture-public-key");
+  await privateKey.fill("fixture-private-key");
+  await page
+    .getByLabel(
+      "I authorize requests under my provider plan and accept applicable provider charges.",
+    )
+    .check();
+  await page.getByRole("button", { name: "Save session connection" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Provider connected for this session",
+  );
+  await expect(publicKey).toHaveValue("");
+  await expect(privateKey).toHaveValue("");
 });

@@ -37,6 +37,9 @@ import { createReport } from "./reports";
 import type { ReportFormat } from "./reports";
 import type { Finding, SearchMode, SearchSummary } from "./models";
 
+type SearchArea = "profiles" | "web" | "dark";
+const indexLimit = (mode: SearchMode) =>
+  mode === "quick" ? 20 : mode === "deep" ? 60 : 100;
 type Page = "search" | "exposure" | "history" | "reports" | "settings";
 const pages = [
   { id: "search", label: "Search", icon: Search },
@@ -85,8 +88,10 @@ export default function App() {
   const [prefsReady, setPrefsReady] = useState(!isNative());
   const [prefsFailed, setPrefsFailed] = useState(false);
   const [prefsAttempt, setPrefsAttempt] = useState(0);
-  const [webSearch, setWebSearch] = useState(false);
-  const [activeWeb, setActiveWeb] = useState(false);
+  const [area, setArea] = useState<SearchArea>("profiles");
+  const [authorized, setAuthorized] = useState(false);
+  const [activeArea, setActiveArea] = useState<SearchArea>("profiles");
+  const activeWeb = activeArea !== "profiles";
   const [resetEpoch, setResetEpoch] = useState(0);
   const job = useRef<string | null>(null);
   const queryInput = useRef<HTMLInputElement>(null);
@@ -94,6 +99,7 @@ export default function App() {
   const prefsRead = useRef<AbortController | null>(null);
   const [total, setTotal] = useState(2);
   const kind = detectQuery(query);
+  const effectiveArea = area === "profiles" && kind === "email" ? "web" : area;
   const confirmed = findings.filter((f) => f.status === "confirmed").length;
   const outcomes = findings.reduce(
     (counts, finding) => {
@@ -199,6 +205,10 @@ export default function App() {
       setNotice("Enter a valid username or email address.");
       return;
     }
+    if (effectiveArea === "dark" && !authorized) {
+      setNotice("Confirm permission to check this username or email.");
+      return;
+    }
     if (!isNative()) {
       setNotice(
         kind === "email"
@@ -217,16 +227,21 @@ export default function App() {
     setFilter("all");
     setNotice("");
     setActiveQuery(query.trim());
-    const useWeb = kind === "email" || webSearch;
-    setActiveWeb(useWeb);
+    const useWeb = effectiveArea !== "profiles";
+    setActiveArea(effectiveArea);
+    if (effectiveArea === "dark") setRedact(true);
     setTotal(useWeb ? 0 : sourceCount(mode));
     try {
       const result = useWeb
-        ? await invoke<SearchSummary>("public_web_search", {
-            jobId: id,
-            query: query.trim(),
-            mode,
-          })
+        ? await invoke<SearchSummary>(
+            effectiveArea === "dark" ? "dark_web_search" : "public_web_search",
+            {
+              jobId: id,
+              query: query.trim(),
+              mode,
+              authorized,
+            },
+          )
         : await search(id, query.trim(), mode, timeout, (update) => {
             if (job.current === update.jobId) {
               setTotal(update.total);
@@ -285,7 +300,15 @@ export default function App() {
     setCanceled(scan.summary.canceled);
     setCompleted(true);
     setFilter("all");
-    setActiveWeb(scan.mode.startsWith("public_web"));
+    const savedArea = scan.mode.startsWith("dark_web")
+      ? "dark"
+      : scan.mode.startsWith("public_web")
+        ? "web"
+        : "profiles";
+    setActiveArea(savedArea);
+    setArea(savedArea);
+    setAuthorized(false);
+    if (savedArea === "dark") setRedact(true);
     setPage("search");
   }
   async function deleteAll() {
@@ -301,7 +324,8 @@ export default function App() {
       setTheme("dark");
       setHistoryEnabled(false);
       setTimeout(12);
-      setWebSearch(false);
+      setArea("profiles");
+      setAuthorized(false);
       setResetEpoch((old) => old + 1);
       try {
         localStorage.removeItem("nexonic.theme");
@@ -394,9 +418,44 @@ export default function App() {
               <div className="intro">
                 <span className="eyebrow">YOUR PUBLIC PRESENCE</span>
                 <h1>Discover your digital footprint.</h1>
-                <p>Find public profiles. See the evidence.</p>
+                <p>Search profiles, the web and exposure indexes.</p>
               </div>
               <form className="search-box" onSubmit={start}>
+                <div
+                  className="search-scope segments"
+                  role="radiogroup"
+                  aria-label="Search area"
+                >
+                  {(
+                    [
+                      { id: "profiles", label: "Profiles" },
+                      { id: "web", label: "Web" },
+                      { id: "dark", label: "Dark web" },
+                    ] as const
+                  ).map((item) => (
+                    <label
+                      key={item.id}
+                      className={effectiveArea === item.id ? "selected" : ""}
+                    >
+                      <input
+                        type="radio"
+                        name="area"
+                        value={item.id}
+                        checked={effectiveArea === item.id}
+                        disabled={
+                          running ||
+                          (item.id === "profiles" && kind === "email")
+                        }
+                        onChange={() => {
+                          setArea(item.id);
+                          setAuthorized(false);
+                          setNotice("");
+                        }}
+                      />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
                 <div className="query-row">
                   <Search size={22} />
                   <label className="sr-only" htmlFor="query">
@@ -407,7 +466,10 @@ export default function App() {
                     id="query"
                     placeholder="Username or email address"
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setAuthorized(false);
+                    }}
                     disabled={running}
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -416,7 +478,11 @@ export default function App() {
                   />
                   <button
                     className="primary-button"
-                    disabled={running || !query.trim()}
+                    disabled={
+                      running ||
+                      !query.trim() ||
+                      (effectiveArea === "dark" && !authorized)
+                    }
                   >
                     {running ? (
                       <LoaderCircle className="spin" size={17} />
@@ -456,11 +522,23 @@ export default function App() {
                     ))}
                   </div>
                   <span className="source-count">
-                    {kind === "email" || webSearch
-                      ? `${mode === "quick" ? 3 : mode === "deep" ? 6 : 10} indexed results max`
+                    {effectiveArea !== "profiles"
+                      ? `${indexLimit(mode)} indexed results max`
                       : `${sourceCount(mode)} sources`}
                   </span>
                 </div>
+                {effectiveArea === "dark" && (
+                  <label className="checkbox-label search-authorization">
+                    <input
+                      type="checkbox"
+                      checked={authorized}
+                      disabled={running}
+                      onChange={(e) => setAuthorized(e.target.checked)}
+                    />
+                    This username or email is mine, or I have permission to
+                    check it.
+                  </label>
+                )}
               </form>
               {running && (
                 <div className="live-status">
@@ -468,7 +546,9 @@ export default function App() {
                     <LoaderCircle size={16} className="spin" />
                     <span>
                       {activeWeb
-                        ? "Searching the public index…"
+                        ? activeArea === "dark"
+                          ? "Searching the licensed dark-web index…"
+                          : "Searching the public index…"
                         : `Checking ${findings.length} of ${total} sources`}
                     </span>
                     <button
@@ -533,7 +613,7 @@ export default function App() {
                     </div>
                   </div>
                   {filtered.map((f) => (
-                    <article className="finding" key={f.url}>
+                    <article className="finding" key={`${f.url}:${f.site}`}>
                       <div className="finding-main">
                         <span className={`status-dot ${f.status}`} />
                         <div>
@@ -574,6 +654,16 @@ export default function App() {
                             <li key={i}>{e}</li>
                           ))}
                         </ul>
+                        {!!f.publicFields?.length && (
+                          <dl className="evidence-fields">
+                            {f.publicFields.map((field, i) => (
+                              <div key={i}>
+                                <dt>{field.label}</dt>
+                                <dd>{field.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
                         <small>{new Date(f.checkedAt).toLocaleString()}</small>
                       </details>
                     </article>
@@ -590,19 +680,31 @@ export default function App() {
                   </p>
                 </section>
               )}
+              <p className="coverage-note">
+                {effectiveArea !== "profiles"
+                  ? "Indexed sources only. No search covers the entire internet or private dark-web content."
+                  : "Profile checks use five direct APIs. Choose Web or Dark web for broader discovery."}
+              </p>
               {!running && !completed && (
                 <div className="starting-state">
                   <div className="source-list">
-                    {(kind === "email" || webSearch
-                      ? ["Brave Search · provider key required"]
+                    {(effectiveArea !== "profiles"
+                      ? [
+                          effectiveArea === "dark"
+                            ? "DarkOwl · licensed keys required"
+                            : "Brave Search · provider key required",
+                        ]
                       : sources.slice(0, sourceCount(mode))
                     ).map((name) => (
                       <span key={name}>{name}</span>
                     ))}
                   </div>
                   <p>
-                    No account needed. Searches go directly to the selected
-                    public sources.
+                    {effectiveArea === "profiles"
+                      ? "No account needed. Searches go directly to the selected public sources."
+                      : effectiveArea === "dark"
+                        ? "Metadata only. No leaked documents or passwords are downloaded. A mention does not prove an exposed credential pair."
+                        : "Search the broader web index for usernames or emails. Results are mentions, not verified accounts."}
                   </p>
                   <span className="sr-only">
                     No generated or sample findings
@@ -692,45 +794,6 @@ export default function App() {
                   onChange={(e) => setHistoryEnabled(e.target.checked)}
                 />
               </label>
-              <label className="setting">
-                <span>
-                  Use public-web search for usernames
-                  <small>
-                    Requires a Brave Search key. Results are indexed mentions,
-                    not verified profiles.
-                  </small>
-                </span>
-                <input
-                  aria-label="Use public-web search for usernames"
-                  type="checkbox"
-                  checked={webSearch}
-                  onChange={(e) => setWebSearch(e.target.checked)}
-                />
-              </label>
-              <div className="setting">
-                <span>
-                  Source rules v1
-                  <small>
-                    Five connectors. Last smoke check: 8 November 2026. Rules
-                    update with application releases.
-                  </small>
-                </span>
-                <a
-                  href="https://github.com/Shahrukhalid/Nexonic-Trace/releases"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    if (isNative()) {
-                      e.preventDefault();
-                      void openSource(
-                        "https://github.com/Shahrukhalid/Nexonic-Trace/releases",
-                      ).catch((error) => setNotice(errorText(error)));
-                    }
-                  }}
-                >
-                  Check updates
-                </a>
-              </div>
               <ProviderSettings key={resetEpoch} onNotice={setNotice} />
               <div className="setting">
                 <span>
@@ -781,8 +844,8 @@ export default function App() {
         <img src="/mark.svg" width="44" height="44" alt="" />
         <h2>Nexonic Trace</h2>
         <p>
-          Searches use permitted public APIs. Every confirmation needs matching
-          account data; HTTP success alone is insufficient.
+          Direct profile checks need matching account evidence. Web and dark-web
+          indexes return unverified mentions within their coverage.
         </p>
         <p>
           Accounts with matching usernames may belong to different people.

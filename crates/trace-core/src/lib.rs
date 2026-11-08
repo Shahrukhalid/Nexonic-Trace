@@ -1,3 +1,4 @@
+pub mod indexed;
 pub mod registry;
 pub mod security;
 // Public API discovery. Account existence is never an ownership assertion.
