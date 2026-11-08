@@ -9,3 +9,11 @@
 - M10–M12 next: full security/license gates, native platform/device validation, Windows/macOS/Android development packaging, signing credentials, and validated release publishing. Never call an unsigned test build a production release.
 
 Architecture research completed once; no comparison source or database incorporated. Keep secrets session-only unless an OS-backed secure-storage adapter is explicitly implemented. Never persist passwords or hash material. Current app history is still session-only until the persistence milestone.
+
+## Privacy, provider, history, and report milestone
+
+Implemented shared Rust password-prefix checks, official HIBP non-sensitive breach lookup, optional Brave public search, session-only zeroizing keys with explicit cost consent, public-field review without identity linkage, opt-in SQLite history/preferences, same-query comparisons, deletion, and JSON/CSV/HTML/PDF export.
+
+Local verification: 24 core Rust tests, 3 native tests, 9 frontend utility/report tests, and 16 desktop/mobile interaction tests passed. Live Pwned Passwords positive check and official HIBP positive/sensitive fixtures passed. No real user password or email was used in these probes. Live positive Brave validation remains unavailable without a licensed key. No signing secrets are configured in GitHub.
+
+Android project initialized; ARM64 Rust compilation passed initially, then APK packaging hit local disk exhaustion. Removed only this task’s regenerable debug caches/download copies, reduced debug artifact size, and resumed the build. Emulator also needs adequate free disk. Production signing and full platform/device acceptance are pending; no production release claim.

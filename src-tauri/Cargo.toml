@@ -20,3 +20,9 @@ trace-core = { path = "../crates/trace-core" }
 tokio.workspace = true
 tokio-util.workspace = true
 serde.workspace = true
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+
+serde_json.workspace = true
+zeroize = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tauri-plugin-fs = "2"
