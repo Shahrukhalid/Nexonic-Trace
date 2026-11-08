@@ -48,6 +48,6 @@ Captured responses for all 30 are regression fixtures in `crates/trace-core/test
 
 ## Path to 100
 
-1. Add a manual, scheduled live check in CI that queries every rule's known account and missing username and fails on drift.
+1. Done: `.github/workflows/sources.yml` queries every source weekly (and on rule changes or on demand) and opens an issue when a provider's responses drift. Run it locally with `NEXONIC_LIVE=1 cargo test -p trace-core --test live_sources -- --nocapture`.
 2. Verify the deferred batch above with that job (about 20 sources).
 3. Add more instances of already-supported software (GitLab, Gitea/Forgejo, Mastodon, Lemmy, MediaWiki), which reuse proven rule shapes, then new single-site APIs. Each addition needs captured found and missing fixtures.

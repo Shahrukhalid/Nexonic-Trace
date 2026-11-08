@@ -1,0 +1,49 @@
+name: Source drift check
+# Queries every profile source weekly with a known public account and an
+# impossible username. Any change in a provider's responses opens an issue.
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/trace-core/rules/**'
+      - 'crates/trace-core/tests/live_sources.rs'
+permissions:
+  contents: read
+concurrency:
+  group: sources-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  live:
+    name: Live source check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: Query every source
+        env:
+          NEXONIC_LIVE: '1'
+          NEXONIC_DRIFT_REPORT: ${{ runner.temp }}/drift.md
+        run: cargo test -p trace-core --test live_sources --locked -- --nocapture
+      - name: Open or update the drift issue
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ runner.temp }}/drift.md
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Profile source drift detected"
+          body=$(printf 'The weekly live check found sources whose responses no longer match their rules.\n\n%s\n\nRun: %s\n' "$(cat "$REPORT" 2>/dev/null || echo 'See the run log.')" "$RUN_URL")
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
