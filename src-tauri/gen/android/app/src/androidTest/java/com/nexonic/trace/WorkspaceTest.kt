@@ -27,9 +27,21 @@ class WorkspaceTest {
             val node = device.findObject(selector) ?: return false
             return !node.visibleBounds.isEmpty
         }
+        fun navigate(label: String, destination: BySelector) {
+            val button = By.clazz("android.widget.Button").text(label)
+            repeat(3) {
+                if (device.hasObject(destination)) return
+                device.waitForIdle()
+                val target = device.wait(Until.findObject(button), 5000)
+                if (target != null && !target.visibleBounds.isEmpty) {
+                    target.click()
+                    if (device.wait(Until.hasObject(destination), 5000)) return
+                }
+            }
+            assertTrue("The $label screen must open through its visible navigation button", device.hasObject(destination))
+        }
         assertTrue("Search screen must open without login", device.wait(Until.hasObject(By.text("Discover your digital footprint.")), 20000))
-        device.findObject(By.text("Settings")).click()
-        assertTrue("Native settings must render", device.wait(Until.hasObject(By.text("Save searches on this device")), 10000))
+        navigate("Settings", By.text("Save searches on this device"))
         // On compact screens this control is below the initial settings viewport.
         for (attempt in 0 until 5) {
             if (visible(By.text("Delete all data"))) break
@@ -48,7 +60,6 @@ class WorkspaceTest {
                 device.displayWidth / 2, device.displayHeight * 3 / 4, 30)
         }
         assertTrue("Native data deletion must complete", device.wait(Until.hasObject(By.textContains("have been cleared")), 15000))
-        device.findObject(By.text("Security")).click()
-        assertTrue("Explicit password check must be available", device.wait(Until.hasObject(By.text("Check password")), 10000))
+        navigate("Security", By.text("Check password"))
     }
 }
