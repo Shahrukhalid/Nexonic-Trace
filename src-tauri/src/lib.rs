@@ -1,5 +1,6 @@
 mod data;
 mod features;
+mod updates;
 use std::time::{Duration, Instant};
 use tauri::ipc::Channel;
 use tauri::{Listener, Manager};
@@ -192,6 +193,9 @@ pub fn run() {
             start_search,
             cancel_search,
             open_source,
+            updates::app_version,
+            updates::check_for_updates,
+            updates::open_update_release,
             features::get_preferences,
             features::set_preferences,
             features::list_scans, features::recent_scans,

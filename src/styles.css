@@ -558,6 +558,10 @@ progress::-webkit-progress-value {
   flex-wrap: wrap;
   margin-top: 23px;
 }
+.setting .button-row {
+  justify-content: flex-end;
+  margin-top: 0;
+}
 .empty {
   display: flex;
   flex-direction: column;
