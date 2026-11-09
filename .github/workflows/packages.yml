@@ -182,11 +182,11 @@ jobs:
           emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none -feature -Vulkan
           emulator-boot-timeout: 600
           script: |
+            cd src-tauri/gen/android && timeout 900 ./gradlew :app:connectedX86_64DebugAndroidTest -x :app:rustBuildX86_64Debug
             adb install -r src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk
             adb shell pm clear com.nexonic.trace
             adb shell am start -W -n com.nexonic.trace/.MainActivity
-            timeout 600 node tests/native/android-smoke.mjs
-            cd src-tauri/gen/android && timeout 900 ./gradlew :app:connectedX86_64DebugAndroidTest -x :app:rustBuildX86_64Debug
+            timeout 240 node tests/native/android-smoke.mjs
       - name: Capture Android failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
