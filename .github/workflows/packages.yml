@@ -115,7 +115,7 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: '-'
       - run: python scripts/package_desktop.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages-${{ matrix.target }}
           path: release-assets/*
@@ -203,7 +203,7 @@ jobs:
             timeout 240 node tests/native/android-smoke.mjs
       - name: Capture Android failure evidence
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-failure-evidence
           path: |
@@ -212,7 +212,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - run: python3 scripts/package_android.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages-android
           path: release-assets/*
