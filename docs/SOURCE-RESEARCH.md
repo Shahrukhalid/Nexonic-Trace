@@ -21,7 +21,7 @@ Last run: 8 November 2026. Every candidate was queried live with a known public 
 | Lemmy: lemmy.world, lemmy.ml, programming.dev | `person.name`, `person.id`, `actor_id` | 404 `couldnt_find_person` |
 | Codeforces | `result[0].handle`, registration time, `status: OK` | 400 `not found` |
 | crates.io | `user.login`, `user.id` | 404 `Not Found` |
-| Speedrun.com | `names.international`, `id`, `weblink` | 404 `could not be found` |
+| Speedrun.com | `data[0].names.international`, `id`, `weblink` (via `?lookup=`; the `/users/{name}` path redirects) | 200 `data: []` |
 | Hex | `username`, `inserted_at` | 404 `not found` |
 | Bitbucket (workspaces) | `slug`, `uuid`, `type: workspace`, html link | 404 `No workspace` |
 | Codewars | `username` (exact case), `id` | 404 `not found` |
@@ -29,6 +29,7 @@ Last run: 8 November 2026. Every candidate was queried live with a known public 
 | Monkeytype | `data.name`, `addedAt`, `Profile retrieved` | 404 `User not found` |
 
 Findings that shaped the engine:
+- Speedrun.com redirects `/users/{name}` to an ID URL. Redirects are never followed, so the rule uses `?lookup=` instead (found by the live drift check on its first run).
 - MediaWiki usernames are case-sensitive after the first letter: `jimbo_wales` is a different account from `Jimbo_Wales`. Wiki sources use exact MediaWiki normalisation.
 - Hacker News and Codewars are case-sensitive; the others compare case-insensitively.
 - Missing accounts are reported in five different ways (404 message, 400 message, `null`, `[]`, a `missing` key). Each rule declares its own; an unexpected error body stays inconclusive.
@@ -48,6 +49,6 @@ Captured responses for all 30 are regression fixtures in `crates/trace-core/test
 
 ## Path to 100
 
-1. Add a manual, scheduled live check in CI that queries every rule's known account and missing username and fails on drift.
+1. Done: `.github/workflows/sources.yml` queries every source weekly (and on rule changes or on demand) and opens an issue when a provider's responses drift. Run it locally with `NEXONIC_LIVE=1 cargo test -p trace-core --test live_sources -- --nocapture`.
 2. Verify the deferred batch above with that job (about 20 sources).
 3. Add more instances of already-supported software (GitLab, Gitea/Forgejo, Mastodon, Lemmy, MediaWiki), which reuse proven rule shapes, then new single-site APIs. Each addition needs captured found and missing fixtures.

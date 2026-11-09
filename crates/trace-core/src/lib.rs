@@ -196,7 +196,12 @@ pub fn classify(
     if status == nf.status {
         let missing = match nf.kind.as_str() {
             "null" => data.is_null(),
-            "emptyArray" => data.as_array().is_some_and(|a| a.is_empty()),
+            "emptyArray" => nf
+                .field
+                .as_deref()
+                .map_or(Some(&data), |f| lookup(&data, f))
+                .and_then(Value::as_array)
+                .is_some_and(|a| a.is_empty()),
             "present" => nf.field.as_deref().and_then(|f| lookup(&data, f)).is_some(),
             _ => nf
                 .field
