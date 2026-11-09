@@ -1,3 +1,6 @@
 include ':app'
+if (System.getenv('NEXONIC_TEST_RELEASE') == '1') {
+    include ':releaseAcceptance'
+}
 
 apply from: 'tauri.settings.gradle'

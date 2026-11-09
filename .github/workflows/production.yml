@@ -26,7 +26,7 @@ jobs:
     environment: production-signing
     permissions:
       contents: read
-      checks: read
+      actions: read
     outputs:
       publish: ${{ steps.policy.outputs.publish }}
       platform: ${{ steps.policy.outputs.platform }}
@@ -234,7 +234,7 @@ jobs:
           mkdir -p src-tauri/gen/android/app/src/main/assets/notices
           cp -R src-tauri/notices/. src-tauri/gen/android/app/src/main/assets/notices/
       - run: npm run tauri -- android build --apk --target aarch64 armv7 x86_64 --split-per-abi --ci
-      - run: src-tauri/gen/android/gradlew -p src-tauri/gen/android :app:assembleX86_64ReleaseAndroidTest -x :app:rustBuildX86_64Release
+      - run: src-tauri/gen/android/gradlew -p src-tauri/gen/android :releaseAcceptance:assembleDebug :releaseAcceptance:assembleDebugAndroidTest
       - run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules

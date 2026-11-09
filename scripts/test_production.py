@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import production
+from apk_checks import signer_fingerprint
 
 
 class ProductionInventoryTests(unittest.TestCase):
@@ -56,6 +57,40 @@ class ProductionInventoryTests(unittest.TestCase):
         file.write_bytes(original)
         self.change(lambda p:p['assets'].append(p['assets'][0]))
         with self.assertRaisesRegex(ValueError,'inventory'):production.validate_inventory(self.root,self.commit)
+
+
+class ApkSignerTests(unittest.TestCase):
+    def test_supported_formats_still_require_a_single_pinned_identity(self):
+        pin = 'a' * 64
+        old = f'Signer #1 certificate SHA-256 digest: {pin}\n'
+        modern = f'V2 Signer: certificate SHA-256 digest: {pin}\n'
+        for report in [old, modern, modern + modern.replace('V2', 'V3')]:
+            self.assertEqual(signer_fingerprint('Number of signers: 1\n' + report), pin)
+        self.assertIsNone(signer_fingerprint('Number of signers: 2\n' + old))
+        self.assertIsNone(signer_fingerprint('Number of signers: 1\n' + modern + modern.replace(pin, 'b' * 64)))
+        self.assertIsNone(signer_fingerprint('Number of signers: 1\n'))
+
+
+class MainAcceptanceTests(unittest.TestCase):
+    def test_same_commit_tag_cannot_replace_main_evidence(self):
+        commit = 'a' * 40
+        def api(command, **kwargs):
+            endpoint = command[-1]
+            if '/workflows/' in endpoint:
+                run_id = 1 if '/ci.yml/' in endpoint else 2
+                return json.dumps({'workflow_runs': [
+                    {'id': 99, 'head_sha': commit, 'head_branch': 'v0.1.0-dev.5', 'event': 'push', 'conclusion': None},
+                    {'id': run_id, 'head_sha': commit, 'head_branch': 'main', 'event': 'push', 'conclusion': 'success'},
+                ]})
+            names = production.REQUIRED[:3] if '/runs/1/' in endpoint else production.REQUIRED[3:]
+            return json.dumps({'jobs': [{'name': name, 'conclusion': 'success'} for name in names]})
+        with patch('production.run', side_effect=api):
+            production.require_main_acceptance(commit)
+        with patch('production.run', return_value=json.dumps({'workflow_runs': [
+            {'id': 99, 'head_sha': commit, 'head_branch': 'v0.1.0-dev.5', 'event': 'push', 'conclusion': 'success'},
+        ]})):
+            with self.assertRaisesRegex(ValueError, 'on main'):
+                production.require_main_acceptance(commit)
 
 
 class SigningMaterialTests(unittest.TestCase):

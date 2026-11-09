@@ -10,7 +10,7 @@ A permanent RSA 3072-bit PKCS12 release identity has been generated. Its public 
 
 Environment secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Variable: `ANDROID_SIGNING_CERT_SHA256`, matching `release/android-signing.json`. `scripts/setup_android_signing.py` refuses to replace an existing identity. This key is for direct APK distribution; a future Play App Signing enrollment requires its own upload-key decision.
 
-Release candidates verify the pinned signer, APK integrity, non-debuggable manifest, disabled backups/cleartext, runtime notices, ARM64/ARM32 contents, and 16 KiB ELF/ZIP alignment. An isolated x86_64 emulator runs UI instrumentation against the actual optimized release app without WebView remote debugging. The validation record states the tested ABI. ARM packages receive static checks; physical ARM device acceptance remains a separate distribution check.
+Release candidates verify the pinned signer, APK integrity, non-debuggable manifest, disabled backups/cleartext, runtime notices, ARM64/ARM32 contents, and 16 KiB ELF/ZIP alignment. An isolated x86_64 emulator runs UI instrumentation from a separate test process against the actual optimized release app. The test process has its own development identity and does not need the release key. The validation record states the tested ABI. ARM packages receive static checks; physical ARM device acceptance remains a separate distribution check.
 
 ## macOS account required
 

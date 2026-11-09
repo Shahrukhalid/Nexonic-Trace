@@ -7,12 +7,24 @@ from pathlib import Path
 import zipfile
 
 
+def signer_fingerprint(output):
+    """Handle both numbered and scheme-prefixed Android SDK signer reports."""
+    counts = re.findall(r'^Number of signers: (\d+)\s*$', output, re.MULTILINE)
+    fingerprints = set(re.findall(
+        r'^(?:V[0-9.]+ )?Signer(?: #\d+)?[: ]+certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$',
+        output, re.MULTILINE | re.IGNORECASE,
+    ))
+    if counts == ['1'] and len(fingerprints) == 1:
+        return next(iter(fingerprints)).lower()
+    return None
+
+
 def verify(apk, abi, sdk, *, release=False, certificate=None):
     tools=sorted((Path(sdk)/'build-tools').iterdir(),key=lambda p:tuple(int(x) for x in p.name.split('.') if x.isdigit()))[-1]
     result=subprocess.run([tools/'apksigner','verify','--verbose','--print-certs',apk],capture_output=True,text=True)
     if result.returncode: raise ValueError('APK signature verification failed')
-    fingerprints=re.findall(r'Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]+)',result.stdout)
-    if release and (len(fingerprints)!=1 or fingerprints[0].lower()!=certificate):
+    fingerprint = signer_fingerprint(result.stdout)
+    if release and (not certificate or fingerprint != certificate):
         raise ValueError('APK signer does not match the committed Android release identity')
     subprocess.run([tools/'zipalign','-c','-P','16','4',apk],check=True,capture_output=True)
     with zipfile.ZipFile(apk) as archive:
@@ -46,4 +58,4 @@ def verify(apk, abi, sdk, *, release=False, certificate=None):
             raise ValueError('Debuggable or test-only APK cannot be published as production')
         if application.get(prefix+'allowBackup')!='false' or application.get(prefix+'usesCleartextTraffic')!='false':
             raise ValueError('Production Android backup/network policy is not enforced')
-    return fingerprints[0].lower() if fingerprints else None
+    return fingerprint

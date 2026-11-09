@@ -67,15 +67,29 @@ def policy():
         run(['git','fetch','origin',f'refs/tags/{tag}:refs/tags/{tag}'])
         if run(['git','rev-parse',f'{tag}^{{commit}}'],capture=True).strip()!=commit:
             raise ValueError('Production tag points to a different source commit')
-    checks=json.loads(run(['gh','api',f'repos/{REPO}/commits/{commit}/check-runs?per_page=100'],capture=True))['check_runs']
-    for name in REQUIRED:
-        matching=[c for c in checks if c['name']==name]
-        latest=max(matching,key=lambda c:c['id']) if matching else None
-        if not latest or latest['conclusion']!='success':
-            raise ValueError('Source acceptance is not successful: '+name)
+    require_main_acceptance(commit)
     with open(os.environ['GITHUB_OUTPUT'],'a') as output:
         output.write(f'publish={str(publish).lower()}\nplatform={platform}\nversion={version()}\ncommit={commit}\n')
     print('Protected source, version and acceptance policy passed.')
+
+
+def require_main_acceptance(commit):
+    # Tag and pull request runs can share a commit and job name. Only main's
+    # push runs are evidence that the protected source passed on main.
+    for workflow, expected in [('ci.yml', REQUIRED[:3]), ('packages.yml', REQUIRED[3:])]:
+        endpoint = f'repos/{REPO}/actions/workflows/{workflow}/runs?branch=main&event=push&head_sha={commit}&per_page=30'
+        runs = json.loads(run(['gh', 'api', endpoint], capture=True))['workflow_runs']
+        main_runs = [item for item in runs if item['head_sha'] == commit
+                     and item['head_branch'] == 'main' and item['event'] == 'push']
+        latest = max(main_runs, key=lambda item: item['id'], default=None)
+        if not latest or latest['conclusion'] != 'success':
+            raise ValueError(f'Source acceptance is not successful on main: {workflow}')
+        jobs_endpoint = f"repos/{REPO}/actions/runs/{latest['id']}/jobs?filter=latest&per_page=100"
+        jobs = json.loads(run(['gh', 'api', jobs_endpoint], capture=True))['jobs']
+        for name in expected:
+            matches = [job for job in jobs if job['name'] == name]
+            if len(matches) != 1 or matches[0]['conclusion'] != 'success':
+                raise ValueError(f'Source acceptance is not successful on main: {name}')
 
 
 def stage(platform):

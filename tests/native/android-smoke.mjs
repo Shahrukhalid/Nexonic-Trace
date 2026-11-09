@@ -18,9 +18,10 @@ try {
     { timeout: 120_000 },
   );
   page = await webview.page();
+  page.setDefaultTimeout(15000);
   await expect(
     page.getByRole("heading", { name: "Discover your digital footprint." }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 25000 });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const historyControl = page.getByLabel("Save searches on this device", {
     exact: true,
@@ -124,7 +125,7 @@ try {
       "Native UI status:",
       await page
         .getByRole("status")
-        .allTextContents()
+        .allTextContents({ timeout: 5000 })
         .catch(() => []),
     );
   }
