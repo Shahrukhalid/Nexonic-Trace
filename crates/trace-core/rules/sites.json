@@ -537,28 +537,27 @@
       "name": "Speedrun.com",
       "category": "Gaming",
       "profileUrl": "https://www.speedrun.com/users/{username}",
-      "apiUrl": "https://www.speedrun.com/api/v1/users/{username}",
+      "apiUrl": "https://www.speedrun.com/api/v1/users?lookup={username}",
       "method": "GET",
       "usernamePattern": "^[A-Za-z0-9_-]{2,30}$",
       "verify": {
-        "usernameField": "data.names.international",
+        "usernameField": "data.0.names.international",
         "usernameMatch": "caseInsensitive",
-        "idField": "data.id",
+        "idField": "data.0.id",
         "idKind": "nonEmptyString",
         "notFound": {
-          "status": 404,
-          "kind": "message",
-          "field": "message",
-          "contains": "could not be found"
+          "status": 200,
+          "kind": "emptyArray",
+          "field": "data"
         },
-        "profileField": "data.weblink"
+        "profileField": "data.0.weblink"
       },
       "publicFields": [],
       "redirects": "refuse",
       "requestsPerSecond": 1,
       "timeoutSeconds": 12,
       "reliability": "live-verified",
-      "lastVerified": "2026-11-08",
+      "lastVerified": "2026-11-09",
       "priority": 15
     },
     {

@@ -67,7 +67,7 @@ pub struct FieldRule {
 pub struct NotFound {
     pub status: u16,
     /// "message" (field contains text), "null" (body is JSON null),
-    /// "emptyArray" (body is []), or "present" (field exists).
+    /// "emptyArray" (the body, or `field` when given, is []), or "present" (field exists).
     pub kind: String,
     #[serde(default)]
     pub field: Option<String>,
