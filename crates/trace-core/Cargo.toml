@@ -13,7 +13,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 futures-util = "0.3"
 regex = "1"
-sha1 = "0.10"
+sha1 = "0.11"
 hmac = "0.12.1"
 base64 = "0.22.1"
 zeroize = { version = "1", features = ["derive"] }
