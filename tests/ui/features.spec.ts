@@ -29,6 +29,18 @@ test.beforeEach(async ({ page }) => {
       transformCallback: () => ++id,
       unregisterCallback: () => {},
       invoke: async (command: string, args: Record<string, unknown> = {}) => {
+        if (command === "app_version") return "0.1.0-dev.7";
+        if (command === "check_for_updates") {
+          return {
+            availableVersion: fixtureCase.has("update-available")
+              ? "0.1.0-dev.8"
+              : null,
+          };
+        }
+        if (command === "open_update_release") {
+          document.body.dataset.openedRelease = String(args.version);
+          return;
+        }
         if (command === "get_preferences") {
           preferenceReads++;
           if (
@@ -134,6 +146,21 @@ test.beforeEach(async ({ page }) => {
       configurable: true,
     });
   });
+});
+
+test("checks for updates and opens the selected release", async ({ page }) => {
+  await page.goto("/?update-available");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByText("Installed version 0.1.0-dev.7")).toBeVisible();
+  await page.getByRole("button", { name: "Check for updates" }).click();
+  await expect(
+    page.getByText("Version 0.1.0-dev.8 is available."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Open download page" }).click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-opened-release",
+    "0.1.0-dev.8",
+  );
 });
 
 test("password input is cleared immediately and prevalence is shown", async ({

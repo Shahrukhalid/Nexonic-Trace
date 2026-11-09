@@ -34,6 +34,7 @@ import {
 } from "./features";
 import type { Preferences, SavedScan } from "./features";
 import { loadLocalSettings } from "./settings";
+import { useUpdates } from "./updates";
 import { createReport } from "./reports";
 import type { ReportFormat } from "./reports";
 import type { Finding, SearchMode, SearchSummary } from "./models";
@@ -69,6 +70,7 @@ const errorText = (error: unknown) =>
 
 export default function App() {
   const [page, setPage] = useState<Page>("search");
+  const updates = useUpdates();
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     try {
       return localStorage.getItem("nexonic.theme") === "light"
@@ -410,6 +412,19 @@ export default function App() {
           </div>
         </header>
         <main id="main">
+          {page !== "settings" && updates.showNotice && (
+            <div className="notice" role="status">
+              <span>Nexonic Trace {updates.available} is available.</span>
+              <button onClick={() => setPage("settings")}>View update</button>
+              <button
+                className="icon-button"
+                aria-label="Dismiss update notice"
+                onClick={updates.dismiss}
+              >
+                <X size={17} />
+              </button>
+            </div>
+          )}
           {notice && (
             <div className="notice" role="status">
               <span>{notice}</span>
@@ -755,6 +770,32 @@ export default function App() {
           {page === "settings" && (
             <section className="panel">
               <h1>Settings</h1>
+              {isNative() && (
+                <div className="setting">
+                  <span>
+                    App updates
+                    <small>Installed version {updates.installed}</small>
+                    <small aria-live="polite">
+                      {updates.message ||
+                        (updates.available &&
+                          `Version ${updates.available} is available.`)}
+                    </small>
+                  </span>
+                  <div className="button-row">
+                    <button
+                      onClick={() => void updates.check(true)}
+                      disabled={updates.checking}
+                    >
+                      {updates.checking ? "Checking…" : "Check for updates"}
+                    </button>
+                    {updates.available && (
+                      <button onClick={() => void updates.openRelease()}>
+                        Open download page <ArrowUpRight size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               {prefsFailed && (
                 <div className="setting">
                   <span>Local settings could not be loaded.</span>
@@ -867,7 +908,7 @@ export default function App() {
           Accounts with matching usernames may belong to different people.
           Source links let you review the original evidence.
         </p>
-        <small>Nexonic Technologies · 0.1.0</small>
+        <small>Nexonic Technologies · {updates.installed}</small>
         <button className="primary-button" onClick={() => setHelp(false)}>
           Got it
           <Check size={16} />
