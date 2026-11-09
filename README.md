@@ -15,7 +15,7 @@ These are development builds for testing. The Windows and macOS downloads may sh
 - **Mac with Intel** · [Disk image (.dmg)](https://github.com/Shahrukhalid/Nexonic-Trace/releases/download/v0.1.0-dev.6/NexonicTrace-macOS-Intel-Development.dmg) · [ZIP archive (.zip)](https://github.com/Shahrukhalid/Nexonic-Trace/releases/download/v0.1.0-dev.6/NexonicTrace-macOS-Intel-Development.zip)
 - **Android** · [64-bit APK](https://github.com/Shahrukhalid/Nexonic-Trace/releases/download/v0.1.0-dev.6/NexonicTrace-Android-ARM64-Development.apk) · [32-bit APK](https://github.com/Shahrukhalid/Nexonic-Trace/releases/download/v0.1.0-dev.6/NexonicTrace-Android-ARM32-Development.apk)
 
-[Release notes for v0.1.0-dev.6](https://github.com/Shahrukhalid/Nexonic-Trace/releases/tag/v0.1.0-dev.6) · [SHA-256 checksums](https://github.com/Shahrukhalid/Nexonic-Trace/releases/download/v0.1.0-dev.6/SHA256SUMS.txt)
+[Release notes for v0.1.0-dev.6](https://github.com/Shahrukhalid/Nexonic-Trace/releases/tag/v0.1.0-dev.6) · [SHA-256 checksums](https://github.com/Shahrukhalid/Nexonic-Trace/releases/download/v0.1.0-dev.6/SHA256SUMS.txt) · [All releases](https://github.com/Shahrukhalid/Nexonic-Trace/releases)
 
 ![Web discovery interface preview](docs/images/nexonic-trace-desktop.png)
 
